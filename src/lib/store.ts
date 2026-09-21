@@ -561,6 +561,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.characters.clear(),
       db.npcMemories.clear(),
       db.actions.clear(),
+      db.aiCache.clear(),
     ]);
     localStorage.clear();
     set({
@@ -579,6 +580,8 @@ export const useStore = create<AppState>((set, get) => ({
       todayCost: 0,
       totalCost: 0,
       totalTokens: 0,
+      selection: null,
+      cacheCount: 0,
     });
   },
 

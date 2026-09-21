@@ -4,9 +4,11 @@ const nextConfig = {
   output: "export",
   // 静态导出必须禁用 next/image 的图片优化
   images: { unoptimized: true },
-  // 部署到 GitHub Pages 项目页（https://用户名.github.io/仓库名/）时，取消下面两行注释：
-  // basePath: "/仓库名",
-  // trailingSlash: true,
+  // GitHub Pages 部署在子路径（用户名.github.io/仓库名/）下，需要 basePath；
+  // 由 GitHub Actions 工作流设置 GITHUB_PAGES=true 时自动启用，Vercel 不受影响。
+  ...(process.env.GITHUB_PAGES === "true"
+    ? { basePath: "/book-play", trailingSlash: true }
+    : {}),
 };
 
 export default nextConfig;

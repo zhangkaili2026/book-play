@@ -138,6 +138,9 @@ export async function importSaveBackup(json: string): Promise<string> {
   if (data?.format !== "bookplay-save-backup" || data?.version !== 1) {
     throw new Error("不是有效的书游存档备份");
   }
+  if (!data.save || !data.pc || !data.book?.title) {
+    throw new Error("存档备份缺少必要数据");
+  }
 
   const book = await db.books.where("title").equals(data.book.title).first();
   if (!book) {

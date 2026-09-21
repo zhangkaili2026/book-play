@@ -43,6 +43,9 @@ export async function callLLM(
 
   const data = await res.json();
   const content: string = data.choices?.[0]?.message?.content ?? "";
+  if (!content.trim()) {
+    throw new Error("AI 返回内容为空");
+  }
   const promptTokens: number = data.usage?.prompt_tokens ?? 0;
   const completionTokens: number = data.usage?.completion_tokens ?? 0;
   const cost =

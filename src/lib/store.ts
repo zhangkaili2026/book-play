@@ -48,6 +48,10 @@ export interface NewPC {
   resources: string[];
 }
 
+// 阅读字体 / 背景色选项
+export type FontChoice = "serif" | "sans" | "kai";
+export type ReadingBgChoice = "paper" | "white" | "green" | "dark";
+
 // 更新 NPC 记忆（模块五：结构化存本地，0 token）
 async function upsertNpcMemory(
   saveId: number,
@@ -113,6 +117,8 @@ interface AppState {
   pureReadMode: boolean;
   fontSize: number;
   lineHeight: number;
+  fontFamily: FontChoice;
+  readingBg: ReadingBgChoice;
 
   // —— 动作 ——
   loadBooks: () => Promise<void>;
@@ -137,6 +143,8 @@ interface AppState {
   togglePureRead: () => void;
   setFontSize: (n: number) => void;
   setLineHeight: (n: number) => void;
+  setFontFamily: (f: FontChoice) => void;
+  setReadingBg: (b: ReadingBgChoice) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -165,6 +173,8 @@ export const useStore = create<AppState>((set, get) => ({
   pureReadMode: false,
   fontSize: 18,
   lineHeight: 1.8,
+  fontFamily: "serif",
+  readingBg: "paper",
 
   async loadBooks() {
     const books = await db.books.orderBy("createdAt").reverse().toArray();
@@ -177,6 +187,11 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const raw = await file.text();
       const parsed = parseChapters(raw);
+
+      if (parsed.length === 0) {
+        alert("这个文件里没识别到任何章节内容，请确认是有效的 txt 小说");
+        return;
+      }
 
       const title = file.name.replace(/\.txt$/i, "");
       const totalChars = parsed.reduce((sum, c) => sum + c.content.length, 0);
@@ -252,7 +267,7 @@ export const useStore = create<AppState>((set, get) => ({
       .first();
 
     if (!chapter) return;
-    set({ currentChapterIndex: index, currentContent: chapter.content });
+    set({ currentChapterIndex: index, currentContent: chapter.content, selection: null });
 
     if (currentSaveId != null) {
       await db.saves.update(currentSaveId, { lastChapterIndex: index });
@@ -585,5 +600,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setLineHeight(n) {
     set({ lineHeight: n });
+  },
+  setFontFamily(f) {
+    set({ fontFamily: f });
+  },
+  setReadingBg(b) {
+    set({ readingBg: b });
   },
 }));

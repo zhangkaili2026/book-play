@@ -101,6 +101,7 @@ interface AppState {
   offset: number;
   recentActions: ActionRecord[];
   npcMemories: NpcMemory[];
+  selection: { paraIndex: number; text: string } | null; // 阅读区选中的段落
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -132,6 +133,7 @@ interface AppState {
   clearAllData: () => Promise<void>;
   openCreator: () => void;
   closeCreator: () => void;
+  setSelection: (sel: { paraIndex: number; text: string } | null) => void;
   togglePureRead: () => void;
   setFontSize: (n: number) => void;
   setLineHeight: (n: number) => void;
@@ -153,6 +155,7 @@ export const useStore = create<AppState>((set, get) => ({
   offset: 0,
   recentActions: [],
   npcMemories: [],
+  selection: null,
 
   todayCost: 0,
   totalCost: 0,
@@ -366,7 +369,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 提交一次行动：简单/中等走本地（0 token），复杂走 AI
   async submitAction(text: string) {
-    const { currentSaveId, currentPC, currentChapterIndex, chapterList, recentActions } = get();
+    const { currentSaveId, currentPC, currentChapterIndex, chapterList, recentActions, selection } = get();
     if (currentSaveId == null) return;
 
     const kind = classifyAction(text);
@@ -435,6 +438,7 @@ export const useStore = create<AppState>((set, get) => ({
       content: text,
       result,
       createdAt: Date.now(),
+      paraIndex: selection?.paraIndex,
       ...(aiCost != null
         ? { cost: aiCost, promptTokens: aiPrompt, completionTokens: aiCompletion, cached: aiCached }
         : {}),
@@ -465,6 +469,7 @@ export const useStore = create<AppState>((set, get) => ({
       todayCost: u.todayCost,
       totalCost: u.totalCost,
       totalTokens: u.totalPrompt + u.totalCompletion,
+      selection: null, // 行动已锚定，清除选区
     });
   },
 
@@ -560,6 +565,10 @@ export const useStore = create<AppState>((set, get) => ({
       totalCost: 0,
       totalTokens: 0,
     });
+  },
+
+  setSelection(sel) {
+    set({ selection: sel });
   },
 
   openCreator() {

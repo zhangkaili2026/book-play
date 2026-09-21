@@ -98,6 +98,7 @@ export interface ActionRecord {
   completionTokens?: number;
   cost?: number;
   cached?: boolean; // 是否命中缓存（0 token）
+  paraIndex?: number; // 行动锚定的段落序号（旁注定位用）
 }
 
 // —— AI 缓存（模块九：相同状态+相同行动 → 复用，0 token）——

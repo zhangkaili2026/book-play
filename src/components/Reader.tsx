@@ -5,7 +5,7 @@ import { useStore } from "@/lib/store";
 import ActionPanel from "@/components/ActionPanel";
 import CharacterPanel from "@/components/CharacterPanel";
 
-// 阅读器：角色/存档栏 + 章节导航 + 正文 + 行动面板 + 成长面板（侧边栏）
+// 阅读器：角色/存档栏 + 章节导航 + 正文（含旁注）+ 行动面板 + 成长面板
 export default function Reader() {
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
@@ -16,19 +16,53 @@ export default function Reader() {
   const saves = useStore((s) => s.saves);
   const currentSaveId = useStore((s) => s.currentSaveId);
   const pureReadMode = useStore((s) => s.pureReadMode);
+  const recentActions = useStore((s) => s.recentActions);
   const gotoChapter = useStore((s) => s.gotoChapter);
   const switchSave = useStore((s) => s.switchSave);
   const openCreator = useStore((s) => s.openCreator);
   const setFontSize = useStore((s) => s.setFontSize);
   const setLineHeight = useStore((s) => s.setLineHeight);
   const togglePureRead = useStore((s) => s.togglePureRead);
+  const setSelection = useStore((s) => s.setSelection);
 
   const [panelOpen, setPanelOpen] = useState(false);
+  const [openNoteId, setOpenNoteId] = useState<number | null>(null);
 
   const chapter = chapterList[currentChapterIndex];
   const hasPrev = currentChapterIndex > 0;
   const hasNext = currentChapterIndex < chapterList.length - 1;
   const paragraphs = currentContent.split("\n");
+
+  // 本章已锚定的行动 → 按段落分组，用于渲染旁注图标
+  const chapterActions = recentActions.filter(
+    (a) => a.chapterIndex === currentChapterIndex && a.paraIndex != null
+  );
+  const notesByPara = new Map<number, typeof chapterActions>();
+  for (const a of chapterActions) {
+    const list = notesByPara.get(a.paraIndex!) ?? [];
+    list.push(a);
+    notesByPara.set(a.paraIndex!, list);
+  }
+
+  // 捕获选中的段落（用于把行动锚定到正文位置）
+  function captureSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      setSelection(null);
+      return;
+    }
+    const node = sel.anchorNode;
+    const el =
+      node?.nodeType === 1
+        ? (node as Element).closest("[data-para-index]")
+        : node?.parentElement?.closest("[data-para-index]");
+    const text = sel.toString().trim();
+    if (!el || !text) {
+      setSelection(null);
+      return;
+    }
+    setSelection({ paraIndex: Number(el.getAttribute("data-para-index")), text });
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -47,9 +81,7 @@ export default function Reader() {
             </>
           ) : (
             <>
-              <span className="text-gray-500 dark:text-gray-400">
-                纯阅读模式 · 尚未开局
-              </span>
+              <span className="text-gray-500 dark:text-gray-400">纯阅读模式 · 尚未开局</span>
               <button
                 onClick={openCreator}
                 className="font-medium text-blue-600 hover:underline dark:text-blue-400"
@@ -150,8 +182,11 @@ export default function Reader() {
           </div>
         </div>
 
-        {/* 正文区（可滚动） */}
-        <div className="flex-1 overflow-y-auto bg-[#faf6ef] dark:bg-gray-950">
+        {/* 正文区（可滚动，含旁注图标） */}
+        <div
+          className="flex-1 overflow-y-auto bg-[#faf6ef] dark:bg-gray-950"
+          onMouseUp={captureSelection}
+        >
           <article
             className="mx-auto max-w-2xl px-6 py-10"
             style={{ fontSize: `${fontSize}px`, lineHeight }}
@@ -159,15 +194,41 @@ export default function Reader() {
             <h1 className="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
               {chapter?.title}
             </h1>
-            {paragraphs.map((para, i) =>
-              para.trim() === "" ? (
-                <div key={i} className="h-4" />
-              ) : (
-                <p key={i} className="mb-3 text-justify indent-8 text-gray-800 dark:text-gray-200">
-                  {para}
-                </p>
-              )
-            )}
+            {paragraphs.map((para, i) => {
+              const notes = notesByPara.get(i) ?? [];
+              if (para.trim() === "") return <div key={i} className="h-4" />;
+              return (
+                <div key={i} className="mb-3">
+                  <p
+                    data-para-index={i}
+                    className="text-justify indent-8 text-gray-800 dark:text-gray-200"
+                  >
+                    {para}
+                    {notes.map((a) => (
+                      <button
+                        key={a.id}
+                        onClick={() => setOpenNoteId(openNoteId === a.id ? null : a.id!)}
+                        className="mx-1 align-super text-sm leading-none"
+                        title={a.content}
+                      >
+                        {a.kind === "complex" ? "📈" : "💡"}
+                      </button>
+                    ))}
+                  </p>
+                  {notes.map(
+                    (a) =>
+                      openNoteId === a.id && (
+                        <div
+                          key={a.id}
+                          className="mt-1 rounded border-l-2 border-amber-400 bg-amber-50 px-3 py-1 text-xs text-gray-600 dark:border-amber-500 dark:bg-amber-900/20 dark:text-gray-300"
+                        >
+                          「{a.content}」→ {a.result}
+                        </div>
+                      )
+                  )}
+                </div>
+              );
+            })}
           </article>
         </div>
 

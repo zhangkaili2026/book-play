@@ -11,6 +11,7 @@ export default function ActionPanel() {
   const currentPC = useStore((s) => s.currentPC);
   const offset = useStore((s) => s.offset);
   const recentActions = useStore((s) => s.recentActions);
+  const selection = useStore((s) => s.selection);
   const submitAction = useStore((s) => s.submitAction);
   const openCreator = useStore((s) => s.openCreator);
 
@@ -76,6 +77,14 @@ export default function ActionPanel() {
         </div>
       )}
 
+      {/* 选区提示 */}
+      {selection && (
+        <div className="mx-4 mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300">
+          📌 行动将锚定到第 {selection.paraIndex + 1} 段：「{selection.text.slice(0, 20)}
+          {selection.text.length > 20 ? "…" : ""}」
+        </div>
+      )}
+
       {/* 行动输入框 */}
       <div className="flex items-end gap-2 px-4 py-3">
         <textarea
@@ -88,7 +97,7 @@ export default function ActionPanel() {
             }
           }}
           rows={2}
-          placeholder="输入你的行动，如：打听萧家的消息 / 结交纳兰嫣然 / 建立自己的势力"
+          placeholder="选中正文某段话，再输入行动，可把影响锚定到那里"
           className="flex-1 resize-none rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
         />
         <div className="flex flex-col items-end gap-1">

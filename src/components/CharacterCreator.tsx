@@ -88,13 +88,15 @@ export default function CharacterCreator() {
   }
 
   const inputCls =
-    "w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+    "w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200";
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
+    <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
       <div className="mx-auto max-w-xl px-6 py-8">
-        <h1 className="mb-1 text-xl font-bold text-gray-900">开局 · 选择你的角色</h1>
-        <p className="mb-6 text-sm text-gray-500">
+        <h1 className="mb-1 text-xl font-bold text-gray-900 dark:text-gray-100">
+          开局 · 选择你的角色
+        </h1>
+        <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
           选定后锁定为唯一 PC，想换角色只能开新存档。初始能力决定你「能做得到的事」。
         </p>
 
@@ -104,25 +106,21 @@ export default function CharacterCreator() {
             <button
               key={t.label}
               onClick={() => applyTemplate(t)}
-              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100"
+              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
             >
               {t.label}
             </button>
           ))}
         </div>
 
-        <div className="space-y-4 rounded-xl bg-white p-6 shadow-sm">
+        <div className="space-y-4 rounded-xl bg-white p-6 shadow-sm dark:bg-gray-900">
           <div className="grid grid-cols-2 gap-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">存档名</span>
-              <input
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
-                className={inputCls}
-              />
+              <span className="mb-1 block text-gray-600 dark:text-gray-400">存档名</span>
+              <input value={saveName} onChange={(e) => setSaveName(e.target.value)} className={inputCls} />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">角色名 *</span>
+              <span className="mb-1 block text-gray-600 dark:text-gray-400">角色名 *</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -134,7 +132,7 @@ export default function CharacterCreator() {
 
           <div className="grid grid-cols-2 gap-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">身份</span>
+              <span className="mb-1 block text-gray-600 dark:text-gray-400">身份</span>
               <input
                 value={identity}
                 onChange={(e) => setIdentity(e.target.value)}
@@ -143,7 +141,7 @@ export default function CharacterCreator() {
               />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">阵营</span>
+              <span className="mb-1 block text-gray-600 dark:text-gray-400">阵营</span>
               <input
                 value={faction}
                 onChange={(e) => setFaction(e.target.value)}
@@ -154,7 +152,7 @@ export default function CharacterCreator() {
           </div>
 
           <label className="text-sm">
-            <span className="mb-1 block text-gray-600">初始能力（逗号分隔）</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">初始能力（逗号分隔）</span>
             <input
               value={abilities}
               onChange={(e) => setAbilities(e.target.value)}
@@ -164,7 +162,7 @@ export default function CharacterCreator() {
           </label>
 
           <label className="text-sm">
-            <span className="mb-1 block text-gray-600">人脉（逗号分隔）</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">人脉（逗号分隔）</span>
             <input
               value={connections}
               onChange={(e) => setConnections(e.target.value)}
@@ -174,7 +172,7 @@ export default function CharacterCreator() {
           </label>
 
           <label className="text-sm">
-            <span className="mb-1 block text-gray-600">势力</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">势力</span>
             <input
               value={power}
               onChange={(e) => setPower(e.target.value)}
@@ -184,7 +182,7 @@ export default function CharacterCreator() {
           </label>
 
           <label className="text-sm">
-            <span className="mb-1 block text-gray-600">资源（逗号分隔）</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">资源（逗号分隔）</span>
             <input
               value={resources}
               onChange={(e) => setResources(e.target.value)}
@@ -202,7 +200,7 @@ export default function CharacterCreator() {
             </button>
             <button
               onClick={closeCreator}
-              className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+              className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               先纯阅读，暂不开局
             </button>

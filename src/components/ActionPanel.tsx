@@ -20,9 +20,9 @@ export default function ActionPanel() {
   // 未开局：提示先开局才能行动
   if (!currentPC) {
     return (
-      <div className="border-t border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+      <div className="border-t border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">
         要插入行动影响剧情，需要先{" "}
-        <button onClick={openCreator} className="font-medium text-blue-600 hover:underline">
+        <button onClick={openCreator} className="font-medium text-blue-600 hover:underline dark:text-blue-400">
           开局
         </button>
         。
@@ -43,31 +43,36 @@ export default function ActionPanel() {
   }
 
   return (
-    <div className="border-t border-gray-200 bg-white">
+    <div className="border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
       {/* 影响栏：偏移度 + 分级 */}
-      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2 text-sm">
-        <span className="font-medium text-gray-700">📈 偏移度 {offset.toFixed(2)}</span>
-        <span className="text-gray-300">·</span>
-        <span className="text-gray-600">{offsetTier(offset)}</span>
-        <span className="ml-auto text-xs text-gray-400">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2 text-sm dark:border-gray-800">
+        <span className="font-medium text-gray-700 dark:text-gray-300">
+          📈 偏移度 {offset.toFixed(2)}
+        </span>
+        <span className="text-gray-300 dark:text-gray-600">·</span>
+        <span className="text-gray-600 dark:text-gray-400">{offsetTier(offset)}</span>
+        <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
           已记录 {recentActions.length} 次行动
         </span>
       </div>
 
       {/* 最近一次行动的结果（引用块样式） */}
       {last && (
-        <div className="mx-4 mt-2 rounded-lg border-l-4 border-blue-400 bg-blue-50 px-3 py-2 text-sm">
-          <div className="mb-1 text-xs text-gray-500">
+        <div className="mx-4 mt-2 rounded-lg border-l-4 border-blue-400 bg-blue-50 px-3 py-2 text-sm dark:border-blue-500 dark:bg-blue-900/30">
+          <div className="mb-1 text-xs text-gray-500 dark:text-gray-400">
             你「{last.content}」
-            <span className="text-blue-600">（{KIND_LABEL[last.kind]} · 第{last.chapterIndex + 1}章）</span>
+            <span className="text-blue-600 dark:text-blue-400">
+              （{KIND_LABEL[last.kind]} · 第{last.chapterIndex + 1}章）
+            </span>
             {last.cost != null && (
-              <span className="text-gray-400">
-                {" "}· {(last.promptTokens ?? 0) + (last.completionTokens ?? 0)} token · ¥
+              <span className="text-gray-400 dark:text-gray-500">
+                {" "}
+                · {(last.promptTokens ?? 0) + (last.completionTokens ?? 0)} token · ¥
                 {last.cost.toFixed(4)}
               </span>
             )}
           </div>
-          <div className="text-gray-700">{last.result}</div>
+          <div className="text-gray-700 dark:text-gray-200">{last.result}</div>
         </div>
       )}
 
@@ -84,14 +89,10 @@ export default function ActionPanel() {
           }}
           rows={2}
           placeholder="输入你的行动，如：打听萧家的消息 / 结交纳兰嫣然 / 建立自己的势力"
-          className="flex-1 resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+          className="flex-1 resize-none rounded border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
         />
         <div className="flex flex-col items-end gap-1">
-          {kind && (
-            <span className="text-xs text-gray-500">
-              {KIND_LABEL[kind]}行动
-            </span>
-          )}
+          {kind && <span className="text-xs text-gray-500 dark:text-gray-400">{KIND_LABEL[kind]}行动</span>}
           <button
             onClick={handleSubmit}
             disabled={submitting || !text.trim()}

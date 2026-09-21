@@ -6,6 +6,7 @@ import BookImporter from "@/components/BookImporter";
 import Reader from "@/components/Reader";
 import CharacterCreator from "@/components/CharacterCreator";
 import SettingsModal from "@/components/SettingsModal";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Home() {
   const books = useStore((s) => s.books);
@@ -18,7 +19,6 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // 首次进入：从 IndexedDB 载入书架
   useEffect(() => {
     loadBooks();
   }, [loadBooks]);
@@ -29,22 +29,25 @@ export default function Home() {
       <>
         <BookImporter />
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="fixed right-4 top-4 rounded-full border border-gray-300 bg-white p-2 text-gray-600 shadow-sm hover:bg-gray-100"
-          title="AI 设置"
-        >
-          ⚙️
-        </button>
+        <div className="fixed right-4 top-4 flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="rounded-full border border-gray-300 bg-white p-2 text-gray-600 shadow-sm hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            title="AI 设置"
+          >
+            ⚙️
+          </button>
+        </div>
       </>
     );
   }
 
   return (
     <div className="flex h-screen flex-col">
-      {/* 顶栏：书架 + 导入 + 设置 */}
-      <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
-        <span className="mr-2 font-bold text-gray-900">书游引擎</span>
+      {/* 顶栏：书架 + 导入 + 主题 + 设置 */}
+      <header className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+        <span className="mr-2 font-bold text-gray-900 dark:text-gray-100">书游引擎</span>
 
         <div className="flex flex-1 items-center gap-2 overflow-x-auto">
           {books.map((b) => (
@@ -53,7 +56,7 @@ export default function Home() {
               className={`group flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-sm ${
                 b.id === currentBookId
                   ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               }`}
               onClick={() => openBook(b.id!)}
             >
@@ -78,9 +81,10 @@ export default function Home() {
         >
           ＋ 导入
         </button>
+        <ThemeToggle />
         <button
           onClick={() => setSettingsOpen(true)}
-          className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+          className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           title="AI 设置"
         >
           ⚙️
@@ -99,7 +103,7 @@ export default function Home() {
 
       {/* 主体：未选书 / 开局 / 阅读 */}
       {currentBookId == null ? (
-        <div className="flex flex-1 items-center justify-center text-gray-400">
+        <div className="flex flex-1 items-center justify-center text-gray-400 dark:text-gray-500">
           点击上方书架里的一本书开始阅读
         </div>
       ) : showCreator ? (

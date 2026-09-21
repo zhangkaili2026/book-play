@@ -9,7 +9,7 @@ import {
 } from "@/lib/settings";
 import { useStore } from "@/lib/store";
 
-// AI 设置弹窗：API Key / 接口 / 模型 / 预算 + 用量统计
+// AI 设置弹窗：API Key / 接口 / 模型 / 预算 + 用量统计 + 数据管理
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const refreshUsage = useStore((s) => s.refreshUsage);
   const todayCost = useStore((s) => s.todayCost);
@@ -32,16 +32,18 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   }
 
   const inputCls =
-    "w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+    "w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6">
-        <h2 className="mb-4 text-lg font-bold text-gray-900">AI 设置</h2>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 dark:bg-gray-900">
+        <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">AI 设置</h2>
 
         <div className="space-y-3 text-sm">
           <label className="block">
-            <span className="mb-1 block text-gray-600">API Key（存本地，不上传）</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">
+              API Key（存本地，不上传）
+            </span>
             <input
               type="password"
               value={s.apiKey}
@@ -52,25 +54,17 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-gray-600">接口地址 Base URL</span>
-            <input
-              value={s.baseUrl}
-              onChange={(e) => update("baseUrl", e.target.value)}
-              className={inputCls}
-            />
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">接口地址 Base URL</span>
+            <input value={s.baseUrl} onChange={(e) => update("baseUrl", e.target.value)} className={inputCls} />
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-gray-600">模型</span>
-            <input
-              value={s.model}
-              onChange={(e) => update("model", e.target.value)}
-              className={inputCls}
-            />
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">模型</span>
+            <input value={s.model} onChange={(e) => update("model", e.target.value)} className={inputCls} />
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-gray-600">每日预算（元）</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">每日预算（元）</span>
             <input
               type="number"
               min="0"
@@ -82,7 +76,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </label>
 
           {/* 用量统计 */}
-          <div className="rounded bg-gray-50 p-3 text-xs text-gray-600">
+          <div className="rounded bg-gray-50 p-3 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
             <div className="flex justify-between">
               <span>今日费用</span>
               <span>¥{todayCost.toFixed(4)}</span>
@@ -107,17 +101,17 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* 本地 Ollama 提示 */}
-          <div className="rounded bg-blue-50 p-3 text-xs leading-relaxed text-blue-700">
+          <div className="rounded bg-blue-50 p-3 text-xs leading-relaxed text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
             想用本地 Ollama（免费、无需 Key、无 CORS 问题）：
             Base URL 填 <code>http://localhost:11434/v1</code>，模型填如{" "}
             <code>qwen2.5:7b</code>，API Key 留空。
           </div>
 
           {/* 数据管理 */}
-          <div className="rounded border border-gray-200 p-3 text-xs">
-            <div className="mb-2 font-medium text-gray-700">数据管理</div>
+          <div className="rounded border border-gray-200 p-3 text-xs dark:border-gray-700">
+            <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">数据管理</div>
             <div className="flex items-center gap-2">
-              <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-gray-600 hover:bg-gray-100">
+              <label className="cursor-pointer rounded border border-gray-300 px-2 py-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
                 导入存档备份（JSON）
                 <input
                   type="file"
@@ -144,19 +138,19 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     onClose();
                   }
                 }}
-                className="rounded border border-red-300 px-2 py-1 text-red-600 hover:bg-red-50"
+                className="rounded border border-red-300 px-2 py-1 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
               >
                 清除所有数据
               </button>
             </div>
-            {importMsg && <p className="mt-2 text-gray-500">{importMsg}</p>}
+            {importMsg && <p className="mt-2 text-gray-500 dark:text-gray-400">{importMsg}</p>}
           </div>
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             取消
           </button>

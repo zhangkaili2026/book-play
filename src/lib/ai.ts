@@ -10,6 +10,7 @@ export interface AIResult {
   promptTokens: number;
   completionTokens: number;
   cost: number;
+  cached?: boolean; // 是否来自缓存（0 token）
 }
 
 export async function callLLM(

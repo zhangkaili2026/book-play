@@ -97,6 +97,18 @@ export interface ActionRecord {
   promptTokens?: number;
   completionTokens?: number;
   cost?: number;
+  cached?: boolean; // 是否命中缓存（0 token）
+}
+
+// —— AI 缓存（模块九：相同状态+相同行动 → 复用，0 token）——
+export interface AiCacheEntry {
+  id?: number;
+  key: string;             // 缓存键
+  result: string;          // 缓存的 AI 结果
+  promptTokens: number;
+  completionTokens: number;
+  cost: number;            // 原始费用（参考）
+  createdAt: number;
 }
 
 class BookPlayDB extends Dexie {
@@ -106,6 +118,7 @@ class BookPlayDB extends Dexie {
   characters!: Table<Character, number>;
   npcMemories!: Table<NpcMemory, number>;
   actions!: Table<ActionRecord, number>;
+  aiCache!: Table<AiCacheEntry, number>;
 
   constructor() {
     super("bookplay");
@@ -119,6 +132,10 @@ class BookPlayDB extends Dexie {
       characters: "++id, saveId, isPC",
       npcMemories: "++id, saveId, npcName",
       actions: "++id, saveId, chapterIndex",
+    });
+    // v3：新增 AI 缓存表
+    this.version(3).stores({
+      aiCache: "++id, key",
     });
   }
 }

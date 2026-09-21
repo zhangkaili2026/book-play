@@ -21,6 +21,7 @@ import {
 } from "./actions";
 import { loadSettings, hasAIAccess, getUsage } from "./settings";
 import { callLLM, buildActionPrompt } from "./ai";
+import { buildCacheKey, getCached, setCached, clearCache, getCacheCount } from "./cache";
 import {
   download,
   buildArchiveMarkdown,
@@ -105,6 +106,7 @@ interface AppState {
   todayCost: number;
   totalCost: number;
   totalTokens: number;
+  cacheCount: number;
 
   // —— 阅读偏好 ——
   pureReadMode: boolean;
@@ -121,7 +123,8 @@ interface AppState {
   deleteSave: (saveId: number) => Promise<void>;
   deleteBook: (bookId: number) => Promise<void>;
   submitAction: (text: string) => Promise<void>;
-  refreshUsage: () => void;
+  refreshUsage: () => Promise<void>;
+  clearAICache: () => Promise<void>;
   exportArchiveMarkdown: () => Promise<void>;
   exportInfluenceMarkdown: () => Promise<void>;
   exportSaveBackup: () => Promise<void>;
@@ -154,6 +157,7 @@ export const useStore = create<AppState>((set, get) => ({
   todayCost: 0,
   totalCost: 0,
   totalTokens: 0,
+  cacheCount: 0,
 
   pureReadMode: false,
   fontSize: 18,
@@ -162,7 +166,7 @@ export const useStore = create<AppState>((set, get) => ({
   async loadBooks() {
     const books = await db.books.orderBy("createdAt").reverse().toArray();
     set({ books });
-    get().refreshUsage();
+    await get().refreshUsage();
   },
 
   async importBook(file: File) {
@@ -371,6 +375,7 @@ export const useStore = create<AppState>((set, get) => ({
     let aiPrompt: number | undefined;
     let aiCompletion: number | undefined;
     let aiCost: number | undefined;
+    let aiCached: boolean | undefined;
 
     if (kind === "complex" && currentPC) {
       const usage = getUsage();
@@ -382,27 +387,41 @@ export const useStore = create<AppState>((set, get) => ({
       } else if (usage.todayCost >= settings.dailyBudget) {
         result = "今日 AI 预算已用完，自动切回占位结果（本地，0 token）。";
       } else {
-        try {
-          const messages = buildActionPrompt({
-            pc: {
-              name: currentPC.name,
-              identity: currentPC.identity,
-              faction: currentPC.faction,
-              abilities: currentPC.abilities,
-              power: currentPC.power,
-              resources: currentPC.resources,
-            },
-            chapterTitle: chapterList[currentChapterIndex]?.title ?? "",
-            recentActions: recentActions.slice(0, 5).map((a) => a.content),
-            action: text,
-          });
-          const ai = await callLLM(messages);
-          result = ai.content;
-          aiPrompt = ai.promptTokens;
-          aiCompletion = ai.completionTokens;
-          aiCost = ai.cost;
-        } catch (e) {
-          result = `AI 调用失败：${(e as Error).message}`;
+        // 先查缓存：相同角色 + 相同章节 + 相同行动 → 直接复用，0 token
+        const cacheKey = buildCacheKey(settings.model, currentPC.name, currentChapterIndex, text);
+        const cached = await getCached(cacheKey);
+
+        if (cached) {
+          result = cached.content;
+          aiPrompt = cached.promptTokens;
+          aiCompletion = cached.completionTokens;
+          aiCost = 0; // 命中缓存：0 新费用
+          aiCached = true;
+        } else {
+          try {
+            const messages = buildActionPrompt({
+              pc: {
+                name: currentPC.name,
+                identity: currentPC.identity,
+                faction: currentPC.faction,
+                abilities: currentPC.abilities,
+                power: currentPC.power,
+                resources: currentPC.resources,
+              },
+              chapterTitle: chapterList[currentChapterIndex]?.title ?? "",
+              recentActions: recentActions.slice(0, 5).map((a) => a.content),
+              action: text,
+            });
+            const ai = await callLLM(messages);
+            await setCached(cacheKey, ai);
+            result = ai.content;
+            aiPrompt = ai.promptTokens;
+            aiCompletion = ai.completionTokens;
+            aiCost = ai.cost;
+            aiCached = false;
+          } catch (e) {
+            result = `AI 调用失败：${(e as Error).message}`;
+          }
         }
       }
     } else {
@@ -417,7 +436,7 @@ export const useStore = create<AppState>((set, get) => ({
       result,
       createdAt: Date.now(),
       ...(aiCost != null
-        ? { cost: aiCost, promptTokens: aiPrompt, completionTokens: aiCompletion }
+        ? { cost: aiCost, promptTokens: aiPrompt, completionTokens: aiCompletion, cached: aiCached }
         : {}),
     });
 
@@ -449,13 +468,20 @@ export const useStore = create<AppState>((set, get) => ({
     });
   },
 
-  refreshUsage() {
+  async refreshUsage() {
     const u = getUsage();
+    const cacheCount = await getCacheCount();
     set({
       todayCost: u.todayCost,
       totalCost: u.totalCost,
       totalTokens: u.totalPrompt + u.totalCompletion,
+      cacheCount,
     });
+  },
+
+  async clearAICache() {
+    await clearCache();
+    set({ cacheCount: 0 });
   },
 
   async exportArchiveMarkdown() {

@@ -17,6 +17,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const totalTokens = useStore((s) => s.totalTokens);
   const importSave = useStore((s) => s.importSave);
   const clearAllData = useStore((s) => s.clearAllData);
+  const clearAICache = useStore((s) => s.clearAICache);
+  const cacheCount = useStore((s) => s.cacheCount);
 
   const [s, setS] = useState<AISettings>(loadSettings());
   const [importMsg, setImportMsg] = useState("");
@@ -89,15 +91,24 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               <span>累计 token</span>
               <span>{totalTokens.toLocaleString()}</span>
             </div>
-            <button
-              onClick={() => {
-                clearUsage();
-                refreshUsage();
-              }}
-              className="mt-2 text-red-500 hover:underline"
-            >
-              清空统计
-            </button>
+            <div className="mt-1 flex justify-between">
+              <span>缓存条数</span>
+              <span>{cacheCount}</span>
+            </div>
+            <div className="mt-2 flex gap-3">
+              <button
+                onClick={() => {
+                  clearUsage();
+                  refreshUsage();
+                }}
+                className="text-red-500 hover:underline"
+              >
+                清空统计
+              </button>
+              <button onClick={() => clearAICache()} className="text-red-500 hover:underline">
+                清理缓存
+              </button>
+            </div>
           </div>
 
           {/* 本地 Ollama 提示 */}

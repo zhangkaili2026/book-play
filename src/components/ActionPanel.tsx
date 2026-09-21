@@ -67,8 +67,8 @@ export default function ActionPanel() {
             {last.cost != null && (
               <span className="text-gray-400 dark:text-gray-500">
                 {" "}
-                · {(last.promptTokens ?? 0) + (last.completionTokens ?? 0)} token · ¥
-                {last.cost.toFixed(4)}
+                · {(last.promptTokens ?? 0) + (last.completionTokens ?? 0)} token
+                {last.cached ? " · 缓存命中 0 token" : ` · ¥${last.cost.toFixed(4)}`}
               </span>
             )}
           </div>

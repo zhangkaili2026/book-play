@@ -1,0 +1,126 @@
+// ============================================================
+// 数据层（唯一真相源）
+// 所有持久化数据都存浏览器 IndexedDB，用 Dexie 封装。
+//
+// 表分两类：
+//   共享且不可变 —— books / chapters（原文永不改动）
+//   每存档独立   —— saves / characters / npcMemories / actions
+// ============================================================
+
+import Dexie, { type Table } from "dexie";
+
+// —— 书：每导入一本 txt 就新增一条 ——
+export interface Book {
+  id?: number;            // 自增主键，Dexie 自动分配
+  title: string;          // 书名
+  author: string;         // 作者（暂留空，后期可从 txt 识别）
+  totalChars: number;     // 总字数
+  chapterCount: number;   // 章节数
+  createdAt: number;      // 导入时间戳（毫秒）
+  lastReadIndex: number;  // 纯阅读（未开局）时读到的章节
+}
+
+// —— 章：一本小说拆成的每一章 ——
+export interface Chapter {
+  id?: number;
+  bookId: number;         // 属于哪本书
+  index: number;          // 章节序号（从 0 开始）
+  title: string;          // 章节标题
+  content: string;        // 章节正文 —— 原文，永不改动
+  charCount: number;      // 本章字数
+  nodes: PlotNode[];      // 剧情节点标记（模块一预留）
+  actions: ActionMark[];  // 已插入行动标记（模块四预留）
+}
+
+export interface PlotNode {
+  id: string;
+  offset: number;
+  type: string;
+  label: string;
+}
+
+export interface ActionMark {
+  id: string;
+  offset: number;
+  summary: string;
+  kind: "simple" | "medium" | "complex";
+  result: string;
+}
+
+// —— 存档：一次"游玩"，绑定一本书 + 一个锁定的 PC ——
+export interface Save {
+  id?: number;
+  bookId: number;
+  name: string;             // 存档名
+  pcId: number;             // 指向 characters 里的 PC
+  offset: number;           // 主线偏移度 0~1（影响层模块用）
+  createdAt: number;
+  lastChapterIndex: number; // 这个存档的阅读进度
+}
+
+// —— 角色：PC 和 NPC 共用一张表，用 isPC 区分 ——
+export interface Character {
+  id?: number;
+  saveId: number;
+  name: string;
+  isPC: boolean;            // 是否玩家角色（一个存档只有一个 PC）
+  identity: string;         // 身份
+  faction: string;          // 阵营
+  abilities: string[];      // 初始能力
+  connections: string[];    // 人脉
+  power: string;            // 势力
+  resources: string[];      // 资源
+}
+
+// —— NPC 记忆（模块五影响层用，本模块先建表）——
+export interface NpcMemory {
+  id?: number;
+  saveId: number;
+  npcName: string;
+  attitude: string;          // 对玩家态度
+  trust: number;             // 信任度 0~1
+  remembered: string[];      // 记住的事
+  tendency: string;          // 行为倾向
+  relationHistory: string[]; // 关系变化史
+}
+
+// —— 行动记录 ——
+export interface ActionRecord {
+  id?: number;
+  saveId: number;
+  chapterIndex: number;
+  kind: "simple" | "medium" | "complex";
+  content: string;           // 玩家输入的行动
+  result: string;            // 行动结果
+  createdAt: number;
+  // AI 消耗（仅复杂行动有值）
+  promptTokens?: number;
+  completionTokens?: number;
+  cost?: number;
+}
+
+class BookPlayDB extends Dexie {
+  books!: Table<Book, number>;
+  chapters!: Table<Chapter, number>;
+  saves!: Table<Save, number>;
+  characters!: Table<Character, number>;
+  npcMemories!: Table<NpcMemory, number>;
+  actions!: Table<ActionRecord, number>;
+
+  constructor() {
+    super("bookplay");
+    this.version(1).stores({
+      books: "++id, title, createdAt",
+      chapters: "++id, bookId, index, [bookId+index]",
+    });
+    // v2：新增存档 / 角色 / NPC记忆 / 行动记录四张表
+    this.version(2).stores({
+      saves: "++id, bookId, createdAt",
+      characters: "++id, saveId, isPC",
+      npcMemories: "++id, saveId, npcName",
+      actions: "++id, saveId, chapterIndex",
+    });
+  }
+}
+
+export const db = new BookPlayDB();

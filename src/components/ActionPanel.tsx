@@ -1,0 +1,106 @@
+"use client";
+
+import { useState } from "react";
+import { useStore } from "@/lib/store";
+import { classifyAction, offsetTier } from "@/lib/actions";
+
+const KIND_LABEL = { simple: "简单", medium: "中等", complex: "复杂" } as const;
+
+// 行动面板：偏移度显示 + 最近行动结果 + 行动输入框
+export default function ActionPanel() {
+  const currentPC = useStore((s) => s.currentPC);
+  const offset = useStore((s) => s.offset);
+  const recentActions = useStore((s) => s.recentActions);
+  const submitAction = useStore((s) => s.submitAction);
+  const openCreator = useStore((s) => s.openCreator);
+
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // 未开局：提示先开局才能行动
+  if (!currentPC) {
+    return (
+      <div className="border-t border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+        要插入行动影响剧情，需要先{" "}
+        <button onClick={openCreator} className="font-medium text-blue-600 hover:underline">
+          开局
+        </button>
+        。
+      </div>
+    );
+  }
+
+  // 实时预览行动分级（教学用）
+  const kind = text.trim() ? classifyAction(text.trim()) : null;
+  const last = recentActions[0];
+
+  async function handleSubmit() {
+    if (!text.trim()) return;
+    setSubmitting(true);
+    await submitAction(text.trim());
+    setText("");
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="border-t border-gray-200 bg-white">
+      {/* 影响栏：偏移度 + 分级 */}
+      <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2 text-sm">
+        <span className="font-medium text-gray-700">📈 偏移度 {offset.toFixed(2)}</span>
+        <span className="text-gray-300">·</span>
+        <span className="text-gray-600">{offsetTier(offset)}</span>
+        <span className="ml-auto text-xs text-gray-400">
+          已记录 {recentActions.length} 次行动
+        </span>
+      </div>
+
+      {/* 最近一次行动的结果（引用块样式） */}
+      {last && (
+        <div className="mx-4 mt-2 rounded-lg border-l-4 border-blue-400 bg-blue-50 px-3 py-2 text-sm">
+          <div className="mb-1 text-xs text-gray-500">
+            你「{last.content}」
+            <span className="text-blue-600">（{KIND_LABEL[last.kind]} · 第{last.chapterIndex + 1}章）</span>
+            {last.cost != null && (
+              <span className="text-gray-400">
+                {" "}· {(last.promptTokens ?? 0) + (last.completionTokens ?? 0)} token · ¥
+                {last.cost.toFixed(4)}
+              </span>
+            )}
+          </div>
+          <div className="text-gray-700">{last.result}</div>
+        </div>
+      )}
+
+      {/* 行动输入框 */}
+      <div className="flex items-end gap-2 px-4 py-3">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          rows={2}
+          placeholder="输入你的行动，如：打听萧家的消息 / 结交纳兰嫣然 / 建立自己的势力"
+          className="flex-1 resize-none rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+        />
+        <div className="flex flex-col items-end gap-1">
+          {kind && (
+            <span className="text-xs text-gray-500">
+              {KIND_LABEL[kind]}行动
+            </span>
+          )}
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !text.trim()}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+          >
+            行动
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

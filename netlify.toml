@@ -1,0 +1,4 @@
+# Netlify 部署配置：构建静态产物 out/ 并发布
+[build]
+  command = "npm run build"
+  publish = "out"

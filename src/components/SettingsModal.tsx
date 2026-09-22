@@ -28,6 +28,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const clearAllData = useStore((s) => s.clearAllData);
   const clearAICache = useStore((s) => s.clearAICache);
   const cacheCount = useStore((s) => s.cacheCount);
+  const runCleanup = useStore((s) => s.runCleanup);
 
   const [s, setS] = useState<AISettings>(loadSettings());
   const [importMsg, setImportMsg] = useState("");
@@ -186,6 +187,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   }}
                 />
               </label>
+              <button
+                onClick={async () => {
+                  const n = await runCleanup();
+                  setImportMsg(n > 0 ? `已清理 ${n} 条垃圾数据` : "没有发现垃圾数据");
+                }}
+                className="rounded border border-gray-300 px-2 py-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                清理垃圾数据
+              </button>
               <button
                 onClick={() => {
                   if (confirm("确定清除所有数据（书、存档、设置、统计）？此操作不可恢复。")) {

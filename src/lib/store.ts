@@ -195,6 +195,56 @@ async function grantXp(
   return next;
 }
 
+// 清理孤儿数据：删除「父记录已不存在」的子记录（历史遗留的垃圾）
+async function cleanupOrphanData(): Promise<{ removed: number }> {
+  const saves = await db.saves.toArray();
+  const books = await db.books.toArray();
+  const validSaveIds = new Set(saves.map((s) => s.id!));
+  const validBookIds = new Set(books.map((b) => b.id!));
+  let removed = 0;
+
+  // 1. 孤儿存档（bookId 无效）→ 连同关联数据一起删
+  for (const s of saves) {
+    if (!validBookIds.has(s.bookId)) {
+      await db.characters.where("saveId").equals(s.id!).delete();
+      await db.npcMemories.where("saveId").equals(s.id!).delete();
+      await db.actions.where("saveId").equals(s.id!).delete();
+      await db.systemStates.where("saveId").equals(s.id!).delete();
+      await db.savePoints.where("saveId").equals(s.id!).delete();
+      await db.saves.delete(s.id!);
+      removed++;
+    }
+  }
+
+  // 2. 孤儿关联数据（saveId 无效）
+  const childTables = [
+    db.characters,
+    db.npcMemories,
+    db.actions,
+    db.systemStates,
+    db.savePoints,
+  ] as const;
+  for (const table of childTables) {
+    const rows = await table.toArray();
+    for (const row of rows) {
+      if (!validSaveIds.has(row.saveId)) {
+        await table.delete(row.id!);
+        removed++;
+      }
+    }
+  }
+
+  // 3. 孤儿章节（bookId 无效）
+  for (const c of await db.chapters.toArray()) {
+    if (!validBookIds.has(c.bookId)) {
+      await db.chapters.delete(c.id!);
+      removed++;
+    }
+  }
+
+  return { removed };
+}
+
 // 快照当前游戏状态（用于存档点）
 async function snapshotCurrentState(saveId: number) {
   const save = await db.saves.get(saveId);
@@ -265,6 +315,7 @@ interface AppState {
   submitAction: (text: string) => Promise<void>;
   refreshUsage: () => Promise<void>;
   clearAICache: () => Promise<void>;
+  runCleanup: () => Promise<number>;
   exportArchiveMarkdown: () => Promise<void>;
   exportInfluenceMarkdown: () => Promise<void>;
   exportSaveBackup: () => Promise<void>;
@@ -325,6 +376,7 @@ export const useStore = create<AppState>((set, get) => ({
     const books = await db.books.orderBy("createdAt").reverse().toArray();
     set({ books });
     await get().refreshUsage();
+    await cleanupOrphanData(); // 静默清理历史遗留的孤儿数据
   },
 
   async importBook(file: File) {
@@ -697,6 +749,11 @@ export const useStore = create<AppState>((set, get) => ({
   async clearAICache() {
     await clearCache();
     set({ cacheCount: 0 });
+  },
+
+  async runCleanup() {
+    const { removed } = await cleanupOrphanData();
+    return removed;
   },
 
   async exportArchiveMarkdown() {

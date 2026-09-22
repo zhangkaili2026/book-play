@@ -555,6 +555,8 @@ export const useStore = create<AppState>((set, get) => ({
       await db.characters.where("saveId").equals(s.id!).delete();
       await db.npcMemories.where("saveId").equals(s.id!).delete();
       await db.actions.where("saveId").equals(s.id!).delete();
+      await db.systemStates.where("saveId").equals(s.id!).delete();
+      await db.savePoints.where("saveId").equals(s.id!).delete();
     }
     await db.saves.where("bookId").equals(bookId).delete();
     await db.chapters.where("bookId").equals(bookId).delete();
@@ -732,9 +734,11 @@ export const useStore = create<AppState>((set, get) => ({
     const pc = await db.characters.get(save.pcId);
     const npcMemories = await db.npcMemories.where("saveId").equals(currentSaveId).toArray();
     const actions = await db.actions.where("saveId").equals(currentSaveId).toArray();
+    const systemState = await getOrCreateSystemState(currentSaveId);
+    const savePoints = await db.savePoints.where("saveId").equals(currentSaveId).toArray();
     const book = await db.books.get(save.bookId);
     if (!pc || !book) return;
-    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions });
+    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints });
     download(`书游存档_${save.name}.json`, JSON.stringify(backup, null, 2), "application/json");
   },
 

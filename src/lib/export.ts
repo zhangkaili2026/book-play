@@ -11,6 +11,8 @@ import {
   type Character,
   type NpcMemory,
   type ActionRecord,
+  type SystemState,
+  type SavePoint,
 } from "./db";
 import { offsetTier } from "./actions";
 
@@ -106,6 +108,15 @@ export interface SaveBackup {
   pc: Character;
   npcMemories: NpcMemory[];
   actions: ActionRecord[];
+  systemState?: {
+    xp: number;
+    level: number;
+    points: number;
+    redeemed: { name: string; at: number }[];
+    messages: string[];
+    readChapters: number[];
+  };
+  savePoints?: SavePoint[];
 }
 
 export function buildSaveBackup(ctx: {
@@ -114,6 +125,8 @@ export function buildSaveBackup(ctx: {
   pc: Character;
   npcMemories: NpcMemory[];
   actions: ActionRecord[];
+  systemState: SystemState;
+  savePoints: SavePoint[];
 }): SaveBackup {
   return {
     format: "bookplay-save-backup",
@@ -124,6 +137,15 @@ export function buildSaveBackup(ctx: {
     pc: ctx.pc,
     npcMemories: ctx.npcMemories,
     actions: ctx.actions,
+    systemState: {
+      xp: ctx.systemState.xp,
+      level: ctx.systemState.level,
+      points: ctx.systemState.points,
+      redeemed: ctx.systemState.redeemed,
+      messages: ctx.systemState.messages,
+      readChapters: ctx.systemState.readChapters,
+    },
+    savePoints: ctx.savePoints,
   };
 }
 
@@ -191,9 +213,45 @@ export async function importSaveBackup(json: string): Promise<string> {
         content: a.content,
         result: a.result,
         createdAt: a.createdAt,
+        paraIndex: a.paraIndex,
         ...(a.cost != null
-          ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens }
+          ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
           : {}),
+      }))
+    );
+  }
+
+  // 恢复系统面板（经验/等级/点数）
+  if (data.systemState) {
+    await db.systemStates.add({
+      saveId,
+      xp: data.systemState.xp ?? 0,
+      level: data.systemState.level ?? 1,
+      points: data.systemState.points ?? 0,
+      redeemed: data.systemState.redeemed ?? [],
+      messages: data.systemState.messages ?? [],
+      readChapters: data.systemState.readChapters ?? [],
+    });
+  }
+
+  // 恢复存档点
+  if (data.savePoints?.length) {
+    await db.savePoints.bulkAdd(
+      data.savePoints.map((sp) => ({
+        saveId,
+        name: sp.name,
+        isAuto: sp.isAuto,
+        createdAt: sp.createdAt,
+        chapterIndex: sp.chapterIndex,
+        offset: sp.offset,
+        xp: sp.xp,
+        level: sp.level,
+        points: sp.points,
+        redeemed: sp.redeemed,
+        messages: sp.messages,
+        readChapters: sp.readChapters,
+        npcMemories: sp.npcMemories,
+        actions: sp.actions,
       }))
     );
   }

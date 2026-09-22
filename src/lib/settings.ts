@@ -32,7 +32,8 @@ export const DEFAULT_SETTINGS: AISettings = {
 export function applyProviderPreset(s: AISettings, provider: AIProvider): AISettings {
   switch (provider) {
     case "ollama":
-      return { ...s, provider, baseUrl: "http://localhost:11434/v1", model: "qwen2.5:7b", apiKey: "" };
+      // 不清理 apiKey：保留用户的 DeepSeek Key，切回来时还在
+      return { ...s, provider, baseUrl: "http://localhost:11434/v1", model: "qwen2.5:7b" };
     case "deepseek":
       return { ...s, provider, baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" };
     case "off":

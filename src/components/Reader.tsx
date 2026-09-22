@@ -91,25 +91,31 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", onKey);
   }, [currentChapterIndex, hasPrev, hasNext, gotoChapter]);
 
-  // 捕获选中的段落（用于把行动锚定到正文位置）
-  function captureSelection() {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
-      setSelection(null);
-      return;
+  // 捕获选中的段落（selectionchange + 防抖，鼠标/触摸通用，支持手机）
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function onSelectionChange() {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const sel = window.getSelection();
+        // 没选区 / 选区折叠 / 不在正文段落里 → 保留原锚点，不清除
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+        const node = sel.anchorNode;
+        const el =
+          node?.nodeType === 1
+            ? (node as Element).closest("[data-para-index]")
+            : node?.parentElement?.closest("[data-para-index]");
+        const text = sel.toString().trim();
+        if (!el || !text) return;
+        setSelection({ paraIndex: Number(el.getAttribute("data-para-index")), text });
+      }, 250);
     }
-    const node = sel.anchorNode;
-    const el =
-      node?.nodeType === 1
-        ? (node as Element).closest("[data-para-index]")
-        : node?.parentElement?.closest("[data-para-index]");
-    const text = sel.toString().trim();
-    if (!el || !text) {
-      setSelection(null);
-      return;
-    }
-    setSelection({ paraIndex: Number(el.getAttribute("data-para-index")), text });
-  }
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
+  }, [setSelection]);
 
   const btnCls =
     "rounded border border-gray-300 px-2 py-1 dark:border-gray-600";
@@ -273,7 +279,6 @@ export default function Reader() {
           ref={scrollRef}
           className="flex-1 overflow-y-auto"
           style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
-          onMouseUp={captureSelection}
         >
           <article
             className="mx-auto max-w-2xl px-6 py-10"

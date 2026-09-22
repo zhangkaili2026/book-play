@@ -83,6 +83,7 @@ npm run build   # 产物在 out/ 目录
 
 - 所有数据存浏览器 IndexedDB（Dexie.js），服务器零存储
 - API Key 存浏览器 localStorage，绝不上传
+- 自动清理无主的孤儿数据，保持数据干净
 - 「⚙️ 设置 → 数据管理」可随时**清除所有数据**
 
 ## 📁 项目结构

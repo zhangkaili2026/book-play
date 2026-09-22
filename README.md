@@ -38,17 +38,17 @@ npm run dev
 
 ## 🤖 配置 AI
 
-「复杂行动」和「开局身份生成」需要 AI。点右上角 ⚙️ 设置，两条路可选：
+「复杂行动」和「开局身份生成」需要 AI。点右上角 ⚙️，顶部有 **4 个「AI 来源」按钮一键切换**：🖥️ 本地 Ollama（免费）/ ☁️ DeepSeek（云）/ 🔧 自定义 / ⛔ 关闭 AI，切换时自动填充接口地址和模型，并显示当前状态（本地免费 / 云计费 / 已关闭）。
 
-**方式一：本地 Ollama（免费、无需 Key、无 CORS 问题）**
+**本地 Ollama（免费、无需 Key）**
 
-1. 安装 [Ollama](https://ollama.com)，运行 `ollama run qwen2.5:7b`
-2. 设置里 Base URL 填 `http://localhost:11434/v1`，模型填 `qwen2.5:7b`，API Key 留空
+1. 安装 [Ollama](https://ollama.com)，运行 `ollama pull qwen2.5:7b`
+2. ⚙️ 点「本地 Ollama」→ 保存
 
-**方式二：DeepSeek（云服务）**
+**DeepSeek（云服务）**
 
 1. 到 [platform.deepseek.com](https://platform.deepseek.com) 申请 API Key
-2. Base URL 填 `https://api.deepseek.com/v1`，模型 `deepseek-chat`，填入 Key
+2. ⚙️ 点「DeepSeek」→ 填 Key → 保存
 
 > ⚠️ API Key 只存在你浏览器 localStorage，**绝不上传服务器**。部分云服务商禁止浏览器直连（CORS 限制），如遇此问题请改用本地 Ollama 或自建代理。
 

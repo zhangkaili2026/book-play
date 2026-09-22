@@ -431,7 +431,8 @@ export const useStore = create<AppState>((set, get) => ({
 
     const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
     const systemState = await getOrCreateSystemState(saveId);
-    const savePoints = await db.savePoints.where("saveId").equals(saveId).reverse().sortBy("createdAt");
+    const savePoints = await db.savePoints.where("saveId").equals(saveId).toArray();
+    savePoints.sort((a, b) => b.createdAt - a.createdAt);
 
     set({
       currentSaveId: saveId,
@@ -780,11 +781,8 @@ export const useStore = create<AppState>((set, get) => ({
       set({ savePoints: [] });
       return;
     }
-    const savePoints = await db.savePoints
-      .where("saveId")
-      .equals(currentSaveId)
-      .reverse()
-      .sortBy("createdAt");
+    const savePoints = await db.savePoints.where("saveId").equals(currentSaveId).toArray();
+    savePoints.sort((a, b) => b.createdAt - a.createdAt);
     set({ savePoints });
   },
 

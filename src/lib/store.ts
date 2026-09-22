@@ -52,6 +52,20 @@ export interface NewPC {
 export type FontChoice = "serif" | "sans" | "kai";
 export type ReadingBgChoice = "paper" | "white" | "green" | "dark";
 
+// 读取文本文件：自动识别编码（UTF-8 优先，失败回退 GBK——中文小说常见）
+async function readTextFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    try {
+      return new TextDecoder("gbk").decode(buf);
+    } catch {
+      return new TextDecoder("utf-8").decode(buf);
+    }
+  }
+}
+
 // 更新 NPC 记忆（模块五：结构化存本地，0 token）
 async function upsertNpcMemory(
   saveId: number,
@@ -185,7 +199,7 @@ export const useStore = create<AppState>((set, get) => ({
   async importBook(file: File) {
     set({ loading: true });
     try {
-      const raw = await file.text();
+      const raw = await readTextFile(file);
       const parsed = parseChapters(raw);
 
       if (parsed.length === 0) {

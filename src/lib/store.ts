@@ -585,7 +585,9 @@ export const useStore = create<AppState>((set, get) => ({
 
       if (!hasAIAccess()) {
         result =
-          "这是复杂行动，需要 AI 判断。你还没配置 API Key —— 点右上角 ⚙️ 配置，或用本地 Ollama（免费）。";
+          settings.provider === "off"
+            ? "AI 已关闭。点右上角 ⚙️，切换到「本地 Ollama」或「DeepSeek」即可重新启用。"
+            : "这是复杂行动，需要 AI 判断。你还没配置 API Key —— 点右上角 ⚙️ 配置，或用本地 Ollama（免费）。";
       } else if (usage.todayCost >= settings.dailyBudget) {
         result = "今日 AI 预算已用完，自动切回占位结果（本地，0 token）。";
       } else {

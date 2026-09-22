@@ -10,7 +10,10 @@ export interface AISettings {
   dailyBudget: number;      // 每日预算（元）
   inputPricePerM: number;   // 每百万输入 token 价格（元）
   outputPricePerM: number;  // 每百万输出 token 价格（元）
+  provider: AIProvider;     // 当前选择的 AI 来源
 }
+
+export type AIProvider = "ollama" | "deepseek" | "custom" | "off";
 
 const SETTINGS_KEY = "bookplay.ai.settings";
 const USAGE_KEY = "bookplay.ai.usage";
@@ -22,7 +25,22 @@ export const DEFAULT_SETTINGS: AISettings = {
   dailyBudget: 1,
   inputPricePerM: 1,
   outputPricePerM: 2,
+  provider: "custom",
 };
+
+// 切换 AI 来源时自动填充的预设
+export function applyProviderPreset(s: AISettings, provider: AIProvider): AISettings {
+  switch (provider) {
+    case "ollama":
+      return { ...s, provider, baseUrl: "http://localhost:11434/v1", model: "qwen2.5:7b", apiKey: "" };
+    case "deepseek":
+      return { ...s, provider, baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" };
+    case "off":
+      return { ...s, provider };
+    default:
+      return { ...s, provider };
+  }
+}
 
 export function loadSettings(): AISettings {
   try {
@@ -38,10 +56,17 @@ export function saveSettings(s: AISettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
 }
 
-// 是否具备 AI 访问能力：有 Key，或指向本地 Ollama（无需 Key）
+// 是否指向本地 Ollama（免费，无需 Key）
+export function isLocalAI(): boolean {
+  const s = loadSettings();
+  return /localhost|127\.0\.0\.1/.test(s.baseUrl);
+}
+
+// 是否具备 AI 访问能力：有 Key，或指向本地 Ollama（无需 Key），且未被手动关闭
 export function hasAIAccess(): boolean {
   const s = loadSettings();
-  return Boolean(s.apiKey) || /localhost|127\.0\.0\.1/.test(s.baseUrl);
+  if (s.provider === "off") return false;
+  return Boolean(s.apiKey) || isLocalAI();
 }
 
 // —— 用量统计（token + 费用，按天累积）——

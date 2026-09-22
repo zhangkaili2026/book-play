@@ -5,11 +5,21 @@ import {
   loadSettings,
   saveSettings,
   clearUsage,
+  isLocalAI,
+  applyProviderPreset,
   type AISettings,
+  type AIProvider,
 } from "@/lib/settings";
 import { useStore } from "@/lib/store";
 
-// AI 设置弹窗：API Key / 接口 / 模型 / 预算 + 用量统计 + 数据管理
+const PROVIDERS: { id: AIProvider; label: string }[] = [
+  { id: "ollama", label: "🖥️ 本地 Ollama" },
+  { id: "deepseek", label: "☁️ DeepSeek" },
+  { id: "custom", label: "🔧 自定义" },
+  { id: "off", label: "⛔ 关闭 AI" },
+];
+
+// AI 设置弹窗：切换 AI 来源 + API Key / 接口 / 模型 / 预算 + 用量统计 + 数据管理
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const refreshUsage = useStore((s) => s.refreshUsage);
   const todayCost = useStore((s) => s.todayCost);
@@ -27,6 +37,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     setS((prev) => ({ ...prev, [key]: value }));
   }
 
+  function selectProvider(p: AIProvider) {
+    setS((prev) => applyProviderPreset(prev, p));
+  }
+
   function handleSave() {
     saveSettings(s);
     refreshUsage();
@@ -36,21 +50,50 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const inputCls =
     "w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200";
 
+  // 当前状态提示
+  const statusLine =
+    s.provider === "off"
+      ? "⛔ AI 已关闭（复杂行动走占位）"
+      : isLocalAI()
+        ? "✅ 本地 Ollama · 免费"
+        : "💳 云服务 · 按量计费";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 dark:bg-gray-900">
-        <h2 className="mb-4 text-lg font-bold text-gray-900 dark:text-gray-100">AI 设置</h2>
+        <h2 className="mb-3 text-lg font-bold text-gray-900 dark:text-gray-100">AI 设置</h2>
+
+        {/* AI 来源切换 */}
+        <div className="mb-2 text-xs text-gray-500 dark:text-gray-400">AI 来源</div>
+        <div className="mb-2 grid grid-cols-2 gap-2">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => selectProvider(p.id)}
+              className={`rounded border px-2 py-1.5 text-sm ${
+                s.provider === p.id
+                  ? "border-blue-500 bg-blue-50 font-medium text-blue-600 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="mb-4 rounded bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+          {statusLine}
+        </div>
 
         <div className="space-y-3 text-sm">
           <label className="block">
             <span className="mb-1 block text-gray-600 dark:text-gray-400">
-              API Key（存本地，不上传）
+              API Key（云服务才需要，本地留空）
             </span>
             <input
               type="password"
               value={s.apiKey}
               onChange={(e) => update("apiKey", e.target.value)}
-              placeholder="sk-...（Ollama 可留空）"
+              placeholder="sk-...（本地 Ollama 可留空）"
               className={inputCls}
             />
           </label>
@@ -112,11 +155,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* 本地 Ollama 提示 */}
-          <div className="rounded bg-blue-50 p-3 text-xs leading-relaxed text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-            想用本地 Ollama（免费、无需 Key、无 CORS 问题）：
-            Base URL 填 <code>http://localhost:11434/v1</code>，模型填如{" "}
-            <code>qwen2.5:7b</code>，API Key 留空。
-          </div>
+          {s.provider === "ollama" && (
+            <div className="rounded bg-blue-50 p-3 text-xs leading-relaxed text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              本地 Ollama 需要：① 装了 Ollama ② 下载了模型 ③ Ollama 正在运行。
+              模型用 <code>ollama pull qwen2.5:7b</code> 下载。完全免费，不消耗任何 token。
+            </div>
+          )}
 
           {/* 数据管理 */}
           <div className="rounded border border-gray-200 p-3 text-xs dark:border-gray-700">

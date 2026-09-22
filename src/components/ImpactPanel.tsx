@@ -2,6 +2,7 @@
 
 import { useStore } from "@/lib/store";
 import { offsetTier } from "@/lib/actions";
+import { isLocalAI } from "@/lib/settings";
 
 const KIND_LABEL = { simple: "简单", medium: "中等", complex: "复杂" } as const;
 
@@ -67,7 +68,11 @@ export default function ImpactPanel({
                 {a.cost != null && (
                   <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
                     {(a.promptTokens ?? 0) + (a.completionTokens ?? 0)} token
-                    {a.cached ? " · 缓存命中 0 token" : ` · ¥${a.cost.toFixed(4)}`}
+                    {a.cached
+                      ? " · 缓存命中 0 token"
+                      : isLocalAI()
+                        ? " · 本地 · 免费"
+                        : ` · ¥${a.cost.toFixed(4)}`}
                   </div>
                 )}
                 <div className="mt-1 text-gray-700 dark:text-gray-200">{a.result}</div>

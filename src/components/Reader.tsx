@@ -6,6 +6,7 @@ import ActionPanel from "@/components/ActionPanel";
 import CharacterPanel from "@/components/CharacterPanel";
 import TocPanel from "@/components/TocPanel";
 import ImpactPanel from "@/components/ImpactPanel";
+import SavePanel from "@/components/SavePanel";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -53,7 +54,7 @@ export default function Reader() {
   const togglePureRead = useStore((s) => s.togglePureRead);
   const setSelection = useStore((s) => s.setSelection);
 
-  const [sidePanel, setSidePanel] = useState<"toc" | "character" | "impact" | null>(null);
+  const [sidePanel, setSidePanel] = useState<"toc" | "character" | "impact" | "save" | null>(null);
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -196,6 +197,13 @@ export default function Reader() {
             title="影响"
           >
             📈 影响
+          </button>
+          <button
+            onClick={() => setSidePanel(sidePanel === "save" ? null : "save")}
+            className={btnCls + " text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}
+            title="存档"
+          >
+            💾 存档
           </button>
           <span className="truncate text-sm text-gray-700 dark:text-gray-300">
             {chapter?.title}
@@ -353,6 +361,7 @@ export default function Reader() {
       {sidePanel === "impact" && (
         <ImpactPanel onClose={() => setSidePanel(null)} focusId={focusActionId} />
       )}
+      {sidePanel === "save" && <SavePanel onClose={() => setSidePanel(null)} />}
       {sidePanel === "character" && <CharacterPanel onClose={() => setSidePanel(null)} />}
     </div>
   );

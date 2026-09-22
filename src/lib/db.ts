@@ -18,6 +18,18 @@ export interface Book {
   chapterCount: number;   // 章节数
   createdAt: number;      // 导入时间戳（毫秒）
   lastReadIndex: number;  // 纯阅读（未开局）时读到的章节
+  templates?: { bookType: string; items: BookTemplateItem[] } | null; // AI 分析出的开局身份模板（缓存）
+}
+
+// 开局身份模板（AI 根据书籍类型生成，与开局界面里的通用模板结构一致）
+export interface BookTemplateItem {
+  label: string;          // 身份标签，如"外门弟子"
+  identity: string;       // 身份描述
+  faction: string;        // 阵营
+  abilities: string[];    // 初始能力
+  connections: string[];  // 人脉
+  power: string;          // 势力
+  resources: string[];    // 资源
 }
 
 // —— 章：一本小说拆成的每一章 ——
@@ -124,6 +136,25 @@ export interface SystemState {
   readChapters: number[];  // 已读章节（用于"读新章节"经验判定）
 }
 
+// —— 存档点（游戏状态快照，用于"玩崩了读档回退"）——
+export interface SavePoint {
+  id?: number;
+  saveId: number;
+  name: string;
+  isAuto: boolean;         // 是否自动存档
+  createdAt: number;
+  chapterIndex: number;    // 保存时所在章节
+  offset: number;          // 偏移度快照
+  xp: number;
+  level: number;
+  points: number;
+  redeemed: { name: string; at: number }[];
+  messages: string[];
+  readChapters: number[];
+  npcMemories: NpcMemory[];   // NPC 记忆副本
+  actions: ActionRecord[];    // 行动记录副本
+}
+
 class BookPlayDB extends Dexie {
   books!: Table<Book, number>;
   chapters!: Table<Chapter, number>;
@@ -133,6 +164,7 @@ class BookPlayDB extends Dexie {
   actions!: Table<ActionRecord, number>;
   aiCache!: Table<AiCacheEntry, number>;
   systemStates!: Table<SystemState, number>;
+  savePoints!: Table<SavePoint, number>;
 
   constructor() {
     super("bookplay");
@@ -154,6 +186,10 @@ class BookPlayDB extends Dexie {
     // v4：新增系统面板表（经验值/等级/点数/兑换）
     this.version(4).stores({
       systemStates: "++id, saveId",
+    });
+    // v5：新增存档点表（快照，用于读档回退）
+    this.version(5).stores({
+      savePoints: "++id, saveId, createdAt",
     });
   }
 }

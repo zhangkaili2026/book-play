@@ -12,6 +12,8 @@ import {
   type ActionRecord,
   type NpcMemory,
   type SystemState,
+  type BookTemplateItem,
+  type SavePoint,
 } from "./db";
 import { parseChapters } from "./parser";
 import {
@@ -21,7 +23,7 @@ import {
   extractTargetName,
 } from "./actions";
 import { loadSettings, hasAIAccess, getUsage } from "./settings";
-import { callLLM, buildActionPrompt } from "./ai";
+import { callLLM, buildActionPrompt, generateBookTemplates } from "./ai";
 import { buildCacheKey, getCached, setCached, clearCache, getCacheCount } from "./cache";
 import { XP_RULES, REDEEM_ITEMS, XP_PER_LEVEL, POINTS_PER_LEVEL } from "./system";
 import {
@@ -161,6 +163,26 @@ async function grantXp(
   return next;
 }
 
+// 快照当前游戏状态（用于存档点）
+async function snapshotCurrentState(saveId: number) {
+  const save = await db.saves.get(saveId);
+  const sys = await getOrCreateSystemState(saveId);
+  const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
+  const actions = await db.actions.where("saveId").equals(saveId).toArray();
+  return {
+    chapterIndex: save?.lastChapterIndex ?? 0,
+    offset: save?.offset ?? 0,
+    xp: sys.xp,
+    level: sys.level,
+    points: sys.points,
+    redeemed: sys.redeemed,
+    messages: sys.messages,
+    readChapters: sys.readChapters,
+    npcMemories,
+    actions,
+  };
+}
+
 interface AppState {
   // —— 书 ——
   books: Book[];
@@ -182,6 +204,9 @@ interface AppState {
   npcMemories: NpcMemory[];
   selection: { paraIndex: number; text: string } | null; // 阅读区选中的段落
   systemState: SystemState | null; // 当前存档的系统面板状态
+  templates: { bookType: string; items: BookTemplateItem[] } | null; // 当前书 AI 生成的开局身份
+  templatesLoading: boolean;
+  savePoints: SavePoint[]; // 当前存档的存档点列表
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -214,6 +239,11 @@ interface AppState {
   importSave: (json: string) => Promise<string>;
   clearAllData: () => Promise<void>;
   redeem: (itemId: string) => Promise<void>;
+  refreshSavePoints: () => Promise<void>;
+  createSavePoint: (name: string) => Promise<void>;
+  autoSavePoint: () => Promise<void>;
+  restoreSavePoint: (id: number) => Promise<void>;
+  deleteSavePoint: (id: number) => Promise<void>;
   openCreator: () => void;
   closeCreator: () => void;
   setSelection: (sel: { paraIndex: number; text: string } | null) => void;
@@ -242,6 +272,9 @@ export const useStore = create<AppState>((set, get) => ({
   npcMemories: [],
   selection: null,
   systemState: null,
+  templates: null,
+  templatesLoading: false,
+  savePoints: [],
 
   todayCost: 0,
   totalCost: 0,
@@ -295,6 +328,19 @@ export const useStore = create<AppState>((set, get) => ({
         }))
       );
 
+      // 分析书籍类型 + 生成开局身份（AI 一次，缓存到书；失败则用通用模板）
+      set({ templatesLoading: true });
+      let templates: { bookType: string; items: BookTemplateItem[] } | null = null;
+      if (hasAIAccess()) {
+        try {
+          templates = await generateBookTemplates(title, parsed[0]?.content ?? "");
+          await db.books.update(bookId, { templates });
+        } catch {
+          templates = null;
+        }
+      }
+      set({ templates, templatesLoading: false });
+
       await get().loadBooks();
       await get().openBook(bookId);
     } finally {
@@ -315,6 +361,7 @@ export const useStore = create<AppState>((set, get) => ({
     }));
 
     const saves = await db.saves.where("bookId").equals(bookId).sortBy("createdAt");
+    const book = await db.books.get(bookId);
 
     set({
       currentBookId: bookId,
@@ -323,10 +370,14 @@ export const useStore = create<AppState>((set, get) => ({
       currentSaveId: null,
       currentPC: null,
       showCreator: saves.length === 0,
+      currentChapterIndex: 0,
       offset: 0,
       recentActions: [],
       npcMemories: [],
       systemState: null,
+      templates: book?.templates ?? null,
+      templatesLoading: false,
+      savePoints: [],
     });
 
     if (saves.length > 0) {
@@ -337,7 +388,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async gotoChapter(index: number) {
-    const { currentBookId, currentSaveId, chapterList } = get();
+    const { currentBookId, currentSaveId, chapterList, currentChapterIndex } = get();
     if (currentBookId == null || index < 0 || index >= chapterList.length) return;
 
     const chapter = await db.chapters
@@ -346,6 +397,10 @@ export const useStore = create<AppState>((set, get) => ({
       .first();
 
     if (!chapter) return;
+    // 自动存档：真正翻到新的一章时，先存当前章的快照
+    if (currentSaveId != null && index !== currentChapterIndex) {
+      await get().autoSavePoint();
+    }
     set({ currentChapterIndex: index, currentContent: chapter.content, selection: null });
 
     if (currentSaveId != null) {
@@ -376,15 +431,18 @@ export const useStore = create<AppState>((set, get) => ({
 
     const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
     const systemState = await getOrCreateSystemState(saveId);
+    const savePoints = await db.savePoints.where("saveId").equals(saveId).reverse().sortBy("createdAt");
 
     set({
       currentSaveId: saveId,
       currentPC: pc ?? null,
       showCreator: false,
+      currentChapterIndex: save.lastChapterIndex, // 让 gotoChapter 不触发自动存档
       offset: save.offset,
       recentActions: recent.slice(0, 20),
       npcMemories,
       systemState,
+      savePoints,
     });
     await get().gotoChapter(save.lastChapterIndex);
   },
@@ -424,6 +482,8 @@ export const useStore = create<AppState>((set, get) => ({
     await db.characters.where("saveId").equals(saveId).delete();
     await db.npcMemories.where("saveId").equals(saveId).delete();
     await db.actions.where("saveId").equals(saveId).delete();
+    await db.systemStates.where("saveId").equals(saveId).delete();
+    await db.savePoints.where("saveId").equals(saveId).delete();
     await db.saves.delete(saveId);
 
     const saves =
@@ -445,6 +505,7 @@ export const useStore = create<AppState>((set, get) => ({
           recentActions: [],
           npcMemories: [],
           systemState: null,
+          savePoints: [],
         });
         await get().gotoChapter(0);
       }
@@ -658,6 +719,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.actions.clear(),
       db.aiCache.clear(),
       db.systemStates.clear(),
+      db.savePoints.clear(),
     ]);
     localStorage.clear();
     set({
@@ -679,6 +741,9 @@ export const useStore = create<AppState>((set, get) => ({
       selection: null,
       cacheCount: 0,
       systemState: null,
+      templates: null,
+      templatesLoading: false,
+      savePoints: [],
     });
   },
 
@@ -707,6 +772,115 @@ export const useStore = create<AppState>((set, get) => ({
 
     await db.systemStates.update(systemState.id!, { points, redeemed, messages });
     set({ systemState: { ...systemState, points, redeemed, messages } });
+  },
+
+  async refreshSavePoints() {
+    const { currentSaveId } = get();
+    if (currentSaveId == null) {
+      set({ savePoints: [] });
+      return;
+    }
+    const savePoints = await db.savePoints
+      .where("saveId")
+      .equals(currentSaveId)
+      .reverse()
+      .sortBy("createdAt");
+    set({ savePoints });
+  },
+
+  async createSavePoint(name: string) {
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const snap = await snapshotCurrentState(currentSaveId);
+    await db.savePoints.add({
+      saveId: currentSaveId,
+      name,
+      isAuto: false,
+      createdAt: Date.now(),
+      ...snap,
+    });
+    await get().refreshSavePoints();
+  },
+
+  // 自动存档：每章结束存一次，只保留最近 3 个
+  async autoSavePoint() {
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const snap = await snapshotCurrentState(currentSaveId);
+    await db.savePoints.add({
+      saveId: currentSaveId,
+      name: "自动存档",
+      isAuto: true,
+      createdAt: Date.now(),
+      ...snap,
+    });
+    const autos = await db.savePoints
+      .where("saveId")
+      .equals(currentSaveId)
+      .and((p) => p.isAuto)
+      .sortBy("createdAt");
+    while (autos.length > 3) {
+      const oldest = autos.shift();
+      if (oldest) await db.savePoints.delete(oldest.id!);
+    }
+    await get().refreshSavePoints();
+  },
+
+  async restoreSavePoint(id: number) {
+    const sp = await db.savePoints.get(id);
+    if (!sp) return;
+
+    await db.saves.update(sp.saveId, {
+      lastChapterIndex: sp.chapterIndex,
+      offset: sp.offset,
+    });
+    const sys = await getOrCreateSystemState(sp.saveId);
+    await db.systemStates.update(sys.id!, {
+      xp: sp.xp,
+      level: sp.level,
+      points: sp.points,
+      redeemed: sp.redeemed,
+      messages: sp.messages,
+      readChapters: sp.readChapters,
+    });
+    await db.npcMemories.where("saveId").equals(sp.saveId).delete();
+    if (sp.npcMemories.length) {
+      await db.npcMemories.bulkAdd(
+        sp.npcMemories.map((m) => ({
+          saveId: sp.saveId,
+          npcName: m.npcName,
+          attitude: m.attitude,
+          trust: m.trust,
+          remembered: m.remembered,
+          tendency: m.tendency,
+          relationHistory: m.relationHistory,
+        }))
+      );
+    }
+    await db.actions.where("saveId").equals(sp.saveId).delete();
+    if (sp.actions.length) {
+      await db.actions.bulkAdd(
+        sp.actions.map((a) => ({
+          saveId: sp.saveId,
+          chapterIndex: a.chapterIndex,
+          kind: a.kind,
+          content: a.content,
+          result: a.result,
+          createdAt: a.createdAt,
+          paraIndex: a.paraIndex,
+          ...(a.cost != null
+            ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
+            : {}),
+        }))
+      );
+    }
+    await get().switchSave(sp.saveId);
+    await get().refreshSavePoints();
+  },
+
+  async deleteSavePoint(id: number) {
+    await db.savePoints.delete(id);
+    await get().refreshSavePoints();
   },
 
   setSelection(sel) {

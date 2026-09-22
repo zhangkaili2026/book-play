@@ -41,6 +41,8 @@ export default function CharacterCreator() {
   const closeCreator = useStore((s) => s.closeCreator);
   const currentBookId = useStore((s) => s.currentBookId);
   const saves = useStore((s) => s.saves);
+  const templates = useStore((s) => s.templates);
+  const templatesLoading = useStore((s) => s.templatesLoading);
 
   const [saveName, setSaveName] = useState(`存档${saves.length + 1}`);
   const [name, setName] = useState("");
@@ -100,17 +102,32 @@ export default function CharacterCreator() {
           选定后锁定为唯一 PC，想换角色只能开新存档。初始能力决定你「能做得到的事」。
         </p>
 
-        {/* 模板快捷填充 */}
-        <div className="mb-5 flex flex-wrap gap-2">
-          {TEMPLATES.map((t) => (
-            <button
-              key={t.label}
-              onClick={() => applyTemplate(t)}
-              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* 模板快捷填充（AI 生成优先，未接入则用通用模板兜底） */}
+        <div className="mb-5">
+          {templatesLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">🔍 正在分析书籍类型、生成身份…</p>
+          ) : (
+            <>
+              {templates ? (
+                <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                  已识别类型：<span className="font-medium">{templates.bookType}</span>
+                </p>
+              ) : (
+                <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">未接入 AI，使用通用模板</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {(templates?.items ?? TEMPLATES).map((t) => (
+                  <button
+                    key={t.label}
+                    onClick={() => applyTemplate(t)}
+                    className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="space-y-4 rounded-xl bg-white p-6 shadow-sm dark:bg-gray-900">

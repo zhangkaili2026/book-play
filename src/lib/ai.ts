@@ -4,6 +4,7 @@
 // ============================================================
 
 import { loadSettings, addUsage, hasAIAccess } from "./settings";
+import type { BookTemplateItem } from "./db";
 
 export interface AIResult {
   content: string;
@@ -98,4 +99,44 @@ export function buildActionPrompt(ctx: {
     { role: "system" as const, content: system },
     { role: "user" as const, content: user },
   ];
+}
+
+// 根据书名 + 开头片段，AI 判断书籍类型并生成 3 个开局身份（只调一次，结果缓存）
+export async function generateBookTemplates(
+  title: string,
+  sample: string
+): Promise<{ bookType: string; items: BookTemplateItem[] }> {
+  const system =
+    "你是网文设定分析助手。根据书名和开头片段判断书籍类型（修仙/后宫/权谋/都市/悬疑等），并生成 3 个符合该书世界观的「开局初始身份」。";
+  const user = [
+    `书名：${title}`,
+    "开头片段：",
+    sample.slice(0, 800),
+    "",
+    "请严格输出 JSON（不要多余文字），格式：",
+    '{"bookType":"类型","items":[{"label":"身份标签","identity":"身份描述","faction":"阵营","abilities":["能力"],"connections":["人脉"],"power":"势力","resources":["资源"]}]}',
+  ].join("\n");
+
+  const res = await callLLM(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    800
+  );
+
+  const content = res.content.trim();
+  // 先直接解析；失败则提取内容里的第一个 { ... }
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.bookType && Array.isArray(parsed.items) && parsed.items.length) return parsed;
+  } catch {
+    /* 继续尝试提取 */
+  }
+  const m = content.match(/\{[\s\S]*\}/);
+  if (m) {
+    const parsed = JSON.parse(m[0]);
+    if (parsed?.bookType && Array.isArray(parsed.items) && parsed.items.length) return parsed;
+  }
+  throw new Error("无法解析 AI 返回的身份模板");
 }

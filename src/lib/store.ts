@@ -70,6 +70,38 @@ async function readTextFile(file: File): Promise<string> {
   }
 }
 
+// 阅读偏好持久化（字号/行距/字体/背景，存 localStorage，刷新不丢）
+const READING_PREFS_KEY = "bookplay.readingPrefs";
+
+function loadReadingPrefs(): {
+  fontSize: number;
+  lineHeight: number;
+  fontFamily: FontChoice;
+  readingBg: ReadingBgChoice;
+} {
+  const defaults = {
+    fontSize: 18,
+    lineHeight: 1.8,
+    fontFamily: "serif" as FontChoice,
+    readingBg: "paper" as ReadingBgChoice,
+  };
+  try {
+    const raw = localStorage.getItem(READING_PREFS_KEY);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
+  } catch {
+    /* ignore */
+  }
+  return defaults;
+}
+
+function saveReadingPrefs(patch: Partial<ReturnType<typeof loadReadingPrefs>>): void {
+  try {
+    localStorage.setItem(READING_PREFS_KEY, JSON.stringify({ ...loadReadingPrefs(), ...patch }));
+  } catch {
+    /* ignore */
+  }
+}
+
 // 更新 NPC 记忆（模块五：结构化存本地，0 token）
 async function upsertNpcMemory(
   saveId: number,
@@ -254,6 +286,8 @@ interface AppState {
   setReadingBg: (b: ReadingBgChoice) => void;
 }
 
+const readingPrefs = loadReadingPrefs();
+
 export const useStore = create<AppState>((set, get) => ({
   books: [],
   currentBookId: null,
@@ -282,10 +316,10 @@ export const useStore = create<AppState>((set, get) => ({
   cacheCount: 0,
 
   pureReadMode: false,
-  fontSize: 18,
-  lineHeight: 1.8,
-  fontFamily: "serif",
-  readingBg: "paper",
+  fontSize: readingPrefs.fontSize,
+  lineHeight: readingPrefs.lineHeight,
+  fontFamily: readingPrefs.fontFamily,
+  readingBg: readingPrefs.readingBg,
 
   async loadBooks() {
     const books = await db.books.orderBy("createdAt").reverse().toArray();
@@ -896,14 +930,18 @@ export const useStore = create<AppState>((set, get) => ({
   },
   setFontSize(n) {
     set({ fontSize: n });
+    saveReadingPrefs({ fontSize: n });
   },
   setLineHeight(n) {
     set({ lineHeight: n });
+    saveReadingPrefs({ lineHeight: n });
   },
   setFontFamily(f) {
     set({ fontFamily: f });
+    saveReadingPrefs({ fontFamily: f });
   },
   setReadingBg(b) {
     set({ readingBg: b });
+    saveReadingPrefs({ readingBg: b });
   },
 }));

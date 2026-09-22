@@ -7,6 +7,7 @@ import CharacterPanel from "@/components/CharacterPanel";
 import TocPanel from "@/components/TocPanel";
 import ImpactPanel from "@/components/ImpactPanel";
 import SavePanel from "@/components/SavePanel";
+import { getScrollPos, setScrollPos } from "@/lib/scroll";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -42,6 +43,7 @@ export default function Reader() {
   const currentPC = useStore((s) => s.currentPC);
   const saves = useStore((s) => s.saves);
   const currentSaveId = useStore((s) => s.currentSaveId);
+  const currentBookId = useStore((s) => s.currentBookId);
   const pureReadMode = useStore((s) => s.pureReadMode);
   const recentActions = useStore((s) => s.recentActions);
   const gotoChapter = useStore((s) => s.gotoChapter);
@@ -58,6 +60,21 @@ export default function Reader() {
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function scrollKey(index: number) {
+    return `${currentSaveId ?? "book" + currentBookId}:${index}`;
+  }
+
+  // 滚动时记录位置（节流 150ms）
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el || saveTimer.current) return;
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      setScrollPos(scrollKey(currentChapterIndex), el.scrollTop);
+    }, 150);
+  }
 
   const chapter = chapterList[currentChapterIndex];
   const hasPrev = currentChapterIndex > 0;
@@ -76,10 +93,13 @@ export default function Reader() {
     notesByPara.set(a.paraIndex!, list);
   }
 
-  // 翻章后回到顶部
+  // 翻章后恢复到该章上次读到的位置（没记录则回到顶部）
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-  }, [currentChapterIndex]);
+    const el = scrollRef.current;
+    if (!el) return;
+    const key = `${currentSaveId ?? "book" + currentBookId}:${currentChapterIndex}`;
+    el.scrollTop = getScrollPos(key);
+  }, [currentChapterIndex, currentSaveId, currentBookId]);
 
   // 键盘快捷键：← / → 翻章（输入框内不触发）
   useEffect(() => {
@@ -298,6 +318,7 @@ export default function Reader() {
           ref={scrollRef}
           className="flex-1 overflow-y-auto"
           style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
+          onScroll={handleScroll}
         >
           <article
             className="mx-auto max-w-2xl px-6 py-10"

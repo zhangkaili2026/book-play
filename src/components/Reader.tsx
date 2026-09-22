@@ -5,6 +5,7 @@ import { useStore, type FontChoice, type ReadingBgChoice } from "@/lib/store";
 import ActionPanel from "@/components/ActionPanel";
 import CharacterPanel from "@/components/CharacterPanel";
 import TocPanel from "@/components/TocPanel";
+import ImpactPanel from "@/components/ImpactPanel";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -52,9 +53,9 @@ export default function Reader() {
   const togglePureRead = useStore((s) => s.togglePureRead);
   const setSelection = useStore((s) => s.setSelection);
 
-  const [sidePanel, setSidePanel] = useState<"toc" | "character" | null>(null);
+  const [sidePanel, setSidePanel] = useState<"toc" | "character" | "impact" | null>(null);
   const [aaOpen, setAaOpen] = useState(false);
-  const [openNoteId, setOpenNoteId] = useState<number | null>(null);
+  const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const chapter = chapterList[currentChapterIndex];
@@ -186,6 +187,16 @@ export default function Reader() {
           >
             📑 目录
           </button>
+          <button
+            onClick={() => {
+              setFocusActionId(null);
+              setSidePanel(sidePanel === "impact" ? null : "impact");
+            }}
+            className={btnCls + " text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}
+            title="影响"
+          >
+            📈 影响
+          </button>
           <span className="truncate text-sm text-gray-700 dark:text-gray-300">
             {chapter?.title}
           </span>
@@ -295,7 +306,10 @@ export default function Reader() {
                     {notes.map((a) => (
                       <button
                         key={a.id}
-                        onClick={() => setOpenNoteId(openNoteId === a.id ? null : a.id!)}
+                        onClick={() => {
+                          setFocusActionId(a.id!);
+                          setSidePanel("impact");
+                        }}
                         className="mx-1 align-super text-sm leading-none"
                         title={a.content}
                       >
@@ -303,17 +317,6 @@ export default function Reader() {
                       </button>
                     ))}
                   </p>
-                  {notes.map(
-                    (a) =>
-                      openNoteId === a.id && (
-                        <div
-                          key={a.id}
-                          className="mt-1 rounded border-l-2 border-amber-400 bg-amber-50 px-3 py-1 text-xs text-gray-600 dark:border-amber-500 dark:bg-amber-900/20 dark:text-gray-300"
-                        >
-                          「{a.content}」→ {a.result}
-                        </div>
-                      )
-                  )}
                 </div>
               );
             })}
@@ -345,8 +348,11 @@ export default function Reader() {
         {!pureReadMode && <ActionPanel />}
       </div>
 
-      {/* 右侧抽屉：目录 / 成长面板 */}
+      {/* 右侧抽屉：目录 / 影响 / 成长面板 */}
       {sidePanel === "toc" && <TocPanel onClose={() => setSidePanel(null)} />}
+      {sidePanel === "impact" && (
+        <ImpactPanel onClose={() => setSidePanel(null)} focusId={focusActionId} />
+      )}
       {sidePanel === "character" && <CharacterPanel onClose={() => setSidePanel(null)} />}
     </div>
   );

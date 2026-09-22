@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { offsetTier } from "@/lib/actions";
+import { REDEEM_ITEMS, CATEGORY_LABEL, XP_PER_LEVEL } from "@/lib/system";
 
-type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset";
+type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "profile", label: "档案" },
@@ -13,6 +14,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "history", label: "履历" },
   { key: "relations", label: "关系" },
   { key: "offset", label: "偏移" },
+  { key: "system", label: "系统" },
 ];
 
 const KIND_LABEL = { simple: "简单", medium: "中等", complex: "复杂" } as const;
@@ -25,6 +27,8 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const offset = useStore((s) => s.offset);
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
+  const systemState = useStore((s) => s.systemState);
+  const redeem = useStore((s) => s.redeem);
   const exportArchive = useStore((s) => s.exportArchiveMarkdown);
   const exportInfluence = useStore((s) => s.exportInfluenceMarkdown);
   const exportBackup = useStore((s) => s.exportSaveBackup);
@@ -272,6 +276,82 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               简单行动 +0，中等行动 +0.05，复杂行动 +0.2。
             </p>
+          </div>
+        )}
+
+        {tab === "system" && (
+          <div className="space-y-4">
+            {/* 等级 + 经验 + 点数 */}
+            <div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                  Lv.{systemState?.level ?? 1}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  点数 {systemState?.points ?? 0}
+                </span>
+              </div>
+              <div className="mt-2">
+                <div className="mb-1 flex justify-between text-xs text-gray-400 dark:text-gray-500">
+                  <span>经验 {systemState?.xp ?? 0}</span>
+                  <span>升级需 {XP_PER_LEVEL}</span>
+                </div>
+                <div className="h-2 rounded bg-gray-200 dark:bg-gray-700">
+                  <div
+                    className="h-2 rounded bg-blue-500"
+                    style={{ width: `${(((systemState?.xp ?? 0) % XP_PER_LEVEL) / XP_PER_LEVEL) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 兑换项 */}
+            <div>
+              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">兑换</div>
+              <div className="space-y-2">
+                {REDEEM_ITEMS.map((item) => {
+                  const enough = (systemState?.points ?? 0) >= item.cost;
+                  const locked = offset >= 0.8;
+                  return (
+                    <div key={item.id} className="rounded border border-gray-200 p-2 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-800 dark:text-gray-200">
+                          {item.name}{" "}
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            ({CATEGORY_LABEL[item.category]})
+                          </span>
+                        </span>
+                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                          {item.cost} 点
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
+                      <button
+                        onClick={() => redeem(item.id)}
+                        disabled={!enough || locked}
+                        className="mt-2 w-full rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40"
+                      >
+                        {locked ? "世界排斥，不可兑换" : enough ? "兑换" : "点数不足"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 系统提示 */}
+            <div>
+              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">系统提示</div>
+              {systemState && systemState.messages.length ? (
+                <ul className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                  {[...systemState.messages].reverse().map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-gray-400 dark:text-gray-500">暂无</p>
+              )}
+            </div>
           </div>
         )}
       </div>

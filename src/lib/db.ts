@@ -112,6 +112,18 @@ export interface AiCacheEntry {
   createdAt: number;
 }
 
+// —— 系统面板（经验值/等级/点数/兑换，每存档一份）——
+export interface SystemState {
+  id?: number;
+  saveId: number;
+  xp: number;              // 经验值
+  level: number;           // 等级
+  points: number;          // 系统点数
+  redeemed: { name: string; at: number }[]; // 兑换记录
+  messages: string[];      // 系统提示（最近几条）
+  readChapters: number[];  // 已读章节（用于"读新章节"经验判定）
+}
+
 class BookPlayDB extends Dexie {
   books!: Table<Book, number>;
   chapters!: Table<Chapter, number>;
@@ -120,6 +132,7 @@ class BookPlayDB extends Dexie {
   npcMemories!: Table<NpcMemory, number>;
   actions!: Table<ActionRecord, number>;
   aiCache!: Table<AiCacheEntry, number>;
+  systemStates!: Table<SystemState, number>;
 
   constructor() {
     super("bookplay");
@@ -137,6 +150,10 @@ class BookPlayDB extends Dexie {
     // v3：新增 AI 缓存表
     this.version(3).stores({
       aiCache: "++id, key",
+    });
+    // v4：新增系统面板表（经验值/等级/点数/兑换）
+    this.version(4).stores({
+      systemStates: "++id, saveId",
     });
   }
 }

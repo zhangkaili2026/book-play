@@ -11,6 +11,7 @@ import {
   type Character,
   type ActionRecord,
   type NpcMemory,
+  type SystemState,
 } from "./db";
 import { parseChapters } from "./parser";
 import {
@@ -22,6 +23,7 @@ import {
 import { loadSettings, hasAIAccess, getUsage } from "./settings";
 import { callLLM, buildActionPrompt } from "./ai";
 import { buildCacheKey, getCached, setCached, clearCache, getCacheCount } from "./cache";
+import { XP_RULES, REDEEM_ITEMS, XP_PER_LEVEL, POINTS_PER_LEVEL } from "./system";
 import {
   download,
   buildArchiveMarkdown,
@@ -100,6 +102,65 @@ async function upsertNpcMemory(
   }
 }
 
+// 读取（或懒创建）某存档的系统状态
+async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
+  let sys = await db.systemStates.where("saveId").equals(saveId).first();
+  if (!sys) {
+    const id = await db.systemStates.add({
+      saveId,
+      xp: 0,
+      level: 1,
+      points: 0,
+      redeemed: [],
+      messages: ["系统已激活"],
+      readChapters: [],
+    });
+    sys = (await db.systemStates.get(id))!;
+  }
+  return sys;
+}
+
+// 发放经验：计算升级/点数，写回库，返回更新后的状态
+async function grantXp(
+  saveId: number,
+  amount: number,
+  reason: string,
+  markChapterRead?: number
+): Promise<SystemState> {
+  const sys = await getOrCreateSystemState(saveId);
+  const xp = sys.xp + amount;
+  const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+  const levelUps = level - sys.level;
+  const points = sys.points + levelUps * POINTS_PER_LEVEL;
+
+  const messages = [...sys.messages, `+${amount} 经验（${reason}）`];
+  if (levelUps > 0) {
+    messages.push(`🎉 升级到 ${level} 级，获得 ${levelUps * POINTS_PER_LEVEL} 点数`);
+  }
+
+  const readChapters =
+    markChapterRead != null && !sys.readChapters.includes(markChapterRead)
+      ? [...sys.readChapters, markChapterRead]
+      : sys.readChapters;
+
+  const next: SystemState = {
+    ...sys,
+    xp,
+    level,
+    points,
+    messages: messages.slice(-20),
+    readChapters,
+  };
+  await db.systemStates.update(sys.id!, {
+    xp,
+    level,
+    points,
+    messages: next.messages,
+    readChapters,
+  });
+  return next;
+}
+
 interface AppState {
   // —— 书 ——
   books: Book[];
@@ -120,6 +181,7 @@ interface AppState {
   recentActions: ActionRecord[];
   npcMemories: NpcMemory[];
   selection: { paraIndex: number; text: string } | null; // 阅读区选中的段落
+  systemState: SystemState | null; // 当前存档的系统面板状态
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -151,6 +213,7 @@ interface AppState {
   exportSaveBackup: () => Promise<void>;
   importSave: (json: string) => Promise<string>;
   clearAllData: () => Promise<void>;
+  redeem: (itemId: string) => Promise<void>;
   openCreator: () => void;
   closeCreator: () => void;
   setSelection: (sel: { paraIndex: number; text: string } | null) => void;
@@ -178,6 +241,7 @@ export const useStore = create<AppState>((set, get) => ({
   recentActions: [],
   npcMemories: [],
   selection: null,
+  systemState: null,
 
   todayCost: 0,
   totalCost: 0,
@@ -262,6 +326,7 @@ export const useStore = create<AppState>((set, get) => ({
       offset: 0,
       recentActions: [],
       npcMemories: [],
+      systemState: null,
     });
 
     if (saves.length > 0) {
@@ -285,6 +350,12 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (currentSaveId != null) {
       await db.saves.update(currentSaveId, { lastChapterIndex: index });
+      // 读新章节经验（已读过的章节不再加）
+      const sys = await getOrCreateSystemState(currentSaveId);
+      if (!sys.readChapters.includes(index)) {
+        const updated = await grantXp(currentSaveId, XP_RULES.newChapter, "阅读新章节", index);
+        set({ systemState: updated });
+      }
     } else {
       await db.books.update(currentBookId, { lastReadIndex: index });
     }
@@ -304,6 +375,7 @@ export const useStore = create<AppState>((set, get) => ({
     recent.sort((a, b) => b.createdAt - a.createdAt);
 
     const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
+    const systemState = await getOrCreateSystemState(saveId);
 
     set({
       currentSaveId: saveId,
@@ -312,6 +384,7 @@ export const useStore = create<AppState>((set, get) => ({
       offset: save.offset,
       recentActions: recent.slice(0, 20),
       npcMemories,
+      systemState,
     });
     await get().gotoChapter(save.lastChapterIndex);
   },
@@ -371,6 +444,7 @@ export const useStore = create<AppState>((set, get) => ({
           offset: 0,
           recentActions: [],
           npcMemories: [],
+          systemState: null,
         });
         await get().gotoChapter(0);
       }
@@ -490,11 +564,18 @@ export const useStore = create<AppState>((set, get) => ({
     recent.sort((a, b) => b.createdAt - a.createdAt);
     const npcMemories = await db.npcMemories.where("saveId").equals(currentSaveId).toArray();
 
+    // 行动经验（本地计算）
+    const xpAmount =
+      kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
+    const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
+    const systemState = await grantXp(currentSaveId, xpAmount, reason);
+
     const u = getUsage();
     set({
       offset: newOffset,
       recentActions: recent.slice(0, 20),
       npcMemories,
+      systemState,
       todayCost: u.todayCost,
       totalCost: u.totalCost,
       totalTokens: u.totalPrompt + u.totalCompletion,
@@ -576,6 +657,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.npcMemories.clear(),
       db.actions.clear(),
       db.aiCache.clear(),
+      db.systemStates.clear(),
     ]);
     localStorage.clear();
     set({
@@ -596,7 +678,35 @@ export const useStore = create<AppState>((set, get) => ({
       totalTokens: 0,
       selection: null,
       cacheCount: 0,
+      systemState: null,
     });
+  },
+
+  // 兑换系统点数（本地规则，受偏移度约束）
+  async redeem(itemId: string) {
+    const { currentSaveId, systemState, offset } = get();
+    if (currentSaveId == null || !systemState) return;
+
+    const item = REDEEM_ITEMS.find((i) => i.id === itemId);
+    if (!item) return;
+
+    // 偏移度 ≥0.8：系统拒绝兑换
+    if (offset >= 0.8) {
+      const sys = await getOrCreateSystemState(currentSaveId);
+      const messages = [...sys.messages, "⚠️ 世界已严重排斥，系统拒绝兑换"].slice(-20);
+      await db.systemStates.update(sys.id!, { messages });
+      set({ systemState: { ...sys, messages } });
+      return;
+    }
+
+    if (systemState.points < item.cost) return; // 点数不足
+
+    const points = systemState.points - item.cost;
+    const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now() }];
+    const messages = [...systemState.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
+
+    await db.systemStates.update(systemState.id!, { points, redeemed, messages });
+    set({ systemState: { ...systemState, points, redeemed, messages } });
   },
 
   setSelection(sel) {

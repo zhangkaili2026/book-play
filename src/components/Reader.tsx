@@ -7,6 +7,8 @@ import CharacterPanel from "@/components/CharacterPanel";
 import TocPanel from "@/components/TocPanel";
 import ImpactPanel from "@/components/ImpactPanel";
 import SavePanel from "@/components/SavePanel";
+import SearchPanel from "@/components/SearchPanel";
+import StatsPanel from "@/components/StatsPanel";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
 
 const FONT_STACKS: Record<FontChoice, string> = {
@@ -56,7 +58,9 @@ export default function Reader() {
   const togglePureRead = useStore((s) => s.togglePureRead);
   const setSelection = useStore((s) => s.setSelection);
 
-  const [sidePanel, setSidePanel] = useState<"toc" | "character" | "impact" | "save" | null>(null);
+  const [sidePanel, setSidePanel] = useState<
+    "toc" | "character" | "impact" | "save" | "search" | "stats" | null
+  >(null);
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -225,6 +229,20 @@ export default function Reader() {
           >
             💾 存档
           </button>
+          <button
+            onClick={() => setSidePanel(sidePanel === "search" ? null : "search")}
+            className={btnCls + " text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}
+            title="搜索"
+          >
+            🔍 搜索
+          </button>
+          <button
+            onClick={() => setSidePanel(sidePanel === "stats" ? null : "stats")}
+            className={btnCls + " text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}
+            title="统计"
+          >
+            📊 统计
+          </button>
           <span className="truncate text-sm text-gray-700 dark:text-gray-300">
             {chapter?.title}
           </span>
@@ -383,6 +401,8 @@ export default function Reader() {
         <ImpactPanel onClose={() => setSidePanel(null)} focusId={focusActionId} />
       )}
       {sidePanel === "save" && <SavePanel onClose={() => setSidePanel(null)} />}
+      {sidePanel === "search" && <SearchPanel onClose={() => setSidePanel(null)} />}
+      {sidePanel === "stats" && <StatsPanel onClose={() => setSidePanel(null)} />}
       {sidePanel === "character" && <CharacterPanel onClose={() => setSidePanel(null)} />}
     </div>
   );

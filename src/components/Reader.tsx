@@ -9,6 +9,7 @@ import ImpactPanel from "@/components/ImpactPanel";
 import SavePanel from "@/components/SavePanel";
 import SearchPanel from "@/components/SearchPanel";
 import StatsPanel from "@/components/StatsPanel";
+import TTSBar from "@/components/TTSBar";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
 
 const FONT_STACKS: Record<FontChoice, string> = {
@@ -390,6 +391,9 @@ export default function Reader() {
             下一章 →
           </button>
         </div>
+
+        {/* 听书栏 */}
+        <TTSBar />
 
         {/* 行动面板：纯阅读模式下隐藏 */}
         {!pureReadMode && <ActionPanel />}

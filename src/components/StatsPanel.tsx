@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { db, type ActionRecord } from "@/lib/db";
 import { useStore } from "@/lib/store";
-import { offsetDeltaFor, offsetTier } from "@/lib/actions";
+import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
+import { download } from "@/lib/export";
 
 // 偏移度趋势曲线（单色折线 + 分级参考线，纯 SVG 无依赖）
 function OffsetSparkline({ trend }: { trend: number[] }) {
@@ -85,6 +86,27 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
     trend.push(cum);
   }
 
+  const ending = getEnding(offset);
+  const complexActions = allActions.filter((a) => a.kind === "complex");
+  const reportMd = [
+    "# 我的书游报告",
+    "",
+    `- 结局：${ending.label}`,
+    `- 章节进度：${currentChapterIndex + 1} / ${chapterList.length}`,
+    `- 行动次数：${allActions.length}（复杂 ${complexActions.length} 次）`,
+    `- 主线偏移度：${offset.toFixed(2)}（${offsetTier(offset)}）`,
+    `- 关系角色：${npcMemories.length}`,
+    `- 等级：Lv.${systemState?.level ?? 1} · 点数 ${systemState?.points ?? 0}`,
+    `- 意难平：${(systemState?.regrets ?? []).length} 条`,
+    "",
+    "## 大事记",
+    ...(complexActions.length
+      ? complexActions.map((a) => `- 第${a.chapterIndex + 1}章「${a.content}」`)
+      : ["- 暂无复杂行动"]),
+    "",
+    `> ${ending.desc}`,
+  ].join("\n");
+
   const stat = (label: string, value: string) => (
     <div className="rounded border border-gray-200 p-2 text-center dark:border-gray-700">
       <div className="text-lg font-bold text-gray-900 dark:text-gray-100">{value}</div>
@@ -130,6 +152,28 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
             虚线为分级线（0.3 / 0.6 / 0.8）。越往上世界越排斥你。
           </p>
+        </div>
+
+        {/* 结局 + 玩后报告 */}
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">结局与报告</span>
+            <button
+              onClick={() => download("我的书游报告.md", reportMd)}
+              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+            >
+              导出报告
+            </button>
+          </div>
+
+          <div className="rounded border border-gray-200 p-3 dark:border-gray-700">
+            <div className="mb-1 font-medium text-gray-900 dark:text-gray-100">🎬 {ending.label}</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{ending.desc}</p>
+          </div>
+
+          <pre className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs leading-relaxed text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+            {reportMd}
+          </pre>
         </div>
       </div>
     </div>

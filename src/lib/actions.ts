@@ -39,6 +39,20 @@ export function offsetTier(offset: number): string {
   return "剧情事件拉回";
 }
 
+// —— 多结局：根据偏移度判定结局走向 ——
+export function getEnding(offset: number): { label: string; desc: string } {
+  if (offset < 0.3) {
+    return { label: "原著结局", desc: "你基本沿着原著路线走完了这本书，改变不多。" };
+  }
+  if (offset < 0.6) {
+    return { label: "改变结局", desc: "你改变了不少关键事件，故事的走向已经和原著不一样了。" };
+  }
+  if (offset < 0.8) {
+    return { label: "颠覆结局", desc: "你大幅改写了剧情，原著世界几乎被你颠覆。" };
+  }
+  return { label: "世界反噬", desc: "偏移过度，原著世界开始排斥你，剧情被强行拉回。" };
+}
+
 // —— 本地结果生成：简单/中等给通用模板反馈，复杂行动标记待 AI ——
 export function resolveAction(text: string, kind: ActionKind, pcName: string): string {
   if (kind === "simple") {

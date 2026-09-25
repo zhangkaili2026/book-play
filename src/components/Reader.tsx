@@ -106,6 +106,8 @@ export default function Reader() {
   // 名场面 + 意难平
   const famousScene = FAMOUS_SCENE_KEYWORDS.some((k) => currentContent.includes(k));
   const regrets = systemState?.regrets ?? [];
+  // 全书进度（0-100）
+  const progress = chapterList.length > 0 ? ((currentChapterIndex + 1) / chapterList.length) * 100 : 0;
 
   // 翻章后恢复到该章上次读到的位置（没记录则回到顶部）
   useEffect(() => {
@@ -192,6 +194,10 @@ export default function Reader() {
       style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
       onScroll={handleScroll}
     >
+      {/* 全书进度条（细、吸顶） */}
+      <div className="sticky top-0 z-10 h-0.5 w-full bg-gray-200/60 dark:bg-gray-700/60">
+        <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />
+      </div>
       <article
         key={currentChapterIndex}
         className="animate-fade-in mx-auto max-w-2xl px-6 py-10"

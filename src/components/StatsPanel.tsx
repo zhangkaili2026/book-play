@@ -7,6 +7,12 @@ import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
 import { generateShareCard } from "@/lib/shareCard";
 
+function formatSeconds(s: number): string {
+  if (s < 60) return `${s}秒`;
+  if (s < 3600) return `${Math.floor(s / 60)}分钟`;
+  return `${Math.floor(s / 3600)}小时${Math.floor((s % 3600) / 60)}分`;
+}
+
 // 偏移度趋势曲线（单色折线 + 分级参考线，纯 SVG 无依赖）
 function OffsetSparkline({ trend }: { trend: number[] }) {
   const w = 300;
@@ -142,6 +148,7 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           {stat("等级", `Lv.${systemState?.level ?? 1}`)}
           {stat("系统点数", `${systemState?.points ?? 0}`)}
           {stat("偏移度", offset.toFixed(2))}
+          {stat("阅读时长", formatSeconds(systemState?.readingSeconds ?? 0))}
         </div>
 
         {/* 偏移度趋势 */}

@@ -138,6 +138,15 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // 阅读时长统计：每 60 秒累加一次
+  useEffect(() => {
+    if (currentSaveId == null) return;
+    const timer = setInterval(() => {
+      useStore.getState().addReadingSeconds(60);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [currentSaveId]);
+
   // 影响回响：早期复杂行动在后续章节的"回音"（本地，0 token）
   useEffect(() => {
     if (currentSaveId == null) {

@@ -135,6 +135,7 @@ export interface SystemState {
   messages: string[];      // 系统提示（最近几条）
   readChapters: number[];  // 已读章节（用于"读新章节"经验判定）
   regrets: string[];       // 意难平清单（玩家最想改变的事，最多 3 条）
+  readingSeconds: number;  // 累计阅读时长（秒）
 }
 
 // —— 存档点（游戏状态快照，用于"玩崩了读档回退"）——

@@ -149,6 +149,7 @@ async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
       messages: ["系统已激活"],
       readChapters: [],
       regrets: [],
+      readingSeconds: 0,
     });
     sys = (await db.systemStates.get(id))!;
   }
@@ -326,6 +327,7 @@ interface AppState {
   redeem: (itemId: string) => Promise<void>;
   addRegret: (text: string) => Promise<void>;
   removeRegret: (index: number) => Promise<void>;
+  addReadingSeconds: (n: number) => Promise<void>;
   refreshSavePoints: () => Promise<void>;
   createSavePoint: (name: string) => Promise<void>;
   autoSavePoint: () => Promise<void>;
@@ -896,6 +898,14 @@ export const useStore = create<AppState>((set, get) => ({
     regrets.splice(index, 1);
     await db.systemStates.update(systemState.id!, { regrets });
     set({ systemState: { ...systemState, regrets } });
+  },
+
+  async addReadingSeconds(n: number) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const readingSeconds = (systemState.readingSeconds ?? 0) + n;
+    await db.systemStates.update(systemState.id!, { readingSeconds });
+    set({ systemState: { ...systemState, readingSeconds } });
   },
 
   async refreshSavePoints() {

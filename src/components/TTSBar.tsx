@@ -15,11 +15,14 @@ export default function TTSBar() {
   const [speed, setSpeed] = useState(1);
   const [timerMin, setTimerMin] = useState(0);
   const [paraIndex, setParaIndex] = useState(0);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceName, setVoiceName] = useState("");
 
   const activeRef = useRef(false);
   const speedRef = useRef(1);
   const paraIndexRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
 
@@ -54,6 +57,7 @@ export default function TTSBar() {
     const u = new SpeechSynthesisUtterance(paras[index]);
     u.lang = "zh-CN";
     u.rate = speedRef.current;
+    if (voiceRef.current) u.voice = voiceRef.current;
     u.onend = () => speakPara(index + 1);
     window.speechSynthesis.speak(u);
   }
@@ -102,6 +106,21 @@ export default function TTSBar() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentContent]);
+
+  // 加载中文音色
+  useEffect(() => {
+    function loadVoices() {
+      const vs = window.speechSynthesis
+        .getVoices()
+        .filter((v) => v.lang.toLowerCase().startsWith("zh"));
+      setVoices(vs);
+    }
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   // 卸载时停止
   useEffect(() => {
@@ -174,6 +193,25 @@ export default function TTSBar() {
               </button>
             ))}
           </div>
+
+          {voices.length > 0 && (
+            <select
+              value={voiceName}
+              onChange={(e) => {
+                const v = voices.find((x) => x.name === e.target.value) ?? null;
+                voiceRef.current = v;
+                setVoiceName(e.target.value);
+              }}
+              className="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+            >
+              <option value="">默认音色</option>
+              {voices.map((v) => (
+                <option key={v.name} value={v.name}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          )}
 
           <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">
             第 {paraIndex + 1} / {paras.length} 段

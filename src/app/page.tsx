@@ -7,6 +7,7 @@ import Reader from "@/components/Reader";
 import CharacterCreator from "@/components/CharacterCreator";
 import SettingsModal from "@/components/SettingsModal";
 import ThemeToggle from "@/components/ThemeToggle";
+import MurderMystery from "@/components/MurderMystery";
 
 export default function Home() {
   const books = useStore((s) => s.books);
@@ -18,6 +19,7 @@ export default function Home() {
   const deleteBook = useStore((s) => s.deleteBook);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [murderOpen, setMurderOpen] = useState(false);
 
   useEffect(() => {
     loadBooks();
@@ -83,6 +85,13 @@ export default function Home() {
         </button>
         <ThemeToggle />
         <button
+          onClick={() => setMurderOpen(true)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          title="剧本杀"
+        >
+          🎭 剧本杀
+        </button>
+        <button
           onClick={() => setSettingsOpen(true)}
           className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           title="AI 设置"
@@ -114,6 +123,9 @@ export default function Home() {
 
       {/* AI 设置弹窗 */}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+      {/* 剧本杀 */}
+      {murderOpen && <MurderMystery onClose={() => setMurderOpen(false)} />}
     </div>
   );
 }

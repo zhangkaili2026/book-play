@@ -30,11 +30,14 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const systemState = useStore((s) => s.systemState);
   const redeem = useStore((s) => s.redeem);
   const shopItems = useStore((s) => s.shopItems);
+  const addRegret = useStore((s) => s.addRegret);
+  const removeRegret = useStore((s) => s.removeRegret);
   const exportArchive = useStore((s) => s.exportArchiveMarkdown);
   const exportInfluence = useStore((s) => s.exportInfluenceMarkdown);
   const exportBackup = useStore((s) => s.exportSaveBackup);
   const [tab, setTab] = useState<Tab>("profile");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [regretText, setRegretText] = useState("");
 
   if (!currentPC) return null;
 
@@ -311,6 +314,57 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* 意难平清单 */}
+            <div>
+              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                意难平（最想改变的事，最多 3 条）
+              </div>
+              {(systemState?.regrets ?? []).length > 0 ? (
+                <ul className="mb-2 space-y-1">
+                  {(systemState?.regrets ?? []).map((r, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center justify-between gap-2 rounded bg-gray-50 px-2 py-1 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    >
+                      <span>{r}</span>
+                      <button onClick={() => removeRegret(i)} className="text-gray-400 hover:text-red-500">
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                  还没有。比如「别让主角被退婚」。
+                </p>
+              )}
+              {(systemState?.regrets?.length ?? 0) < 3 && (
+                <div className="flex gap-2">
+                  <input
+                    value={regretText}
+                    onChange={(e) => setRegretText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        addRegret(regretText);
+                        setRegretText("");
+                      }
+                    }}
+                    placeholder="输入一件你想改变的事"
+                    className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                  />
+                  <button
+                    onClick={() => {
+                      addRegret(regretText);
+                      setRegretText("");
+                    }}
+                    className="shrink-0 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                  >
+                    添加
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 商城（按难度分层） */}

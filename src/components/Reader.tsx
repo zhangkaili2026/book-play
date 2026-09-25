@@ -12,6 +12,7 @@ import StatsPanel from "@/components/StatsPanel";
 import TTSBar from "@/components/TTSBar";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
 import { db, type ActionRecord } from "@/lib/db";
+import { FAMOUS_SCENE_KEYWORDS } from "@/lib/system";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -50,6 +51,7 @@ export default function Reader() {
   const currentBookId = useStore((s) => s.currentBookId);
   const pureReadMode = useStore((s) => s.pureReadMode);
   const recentActions = useStore((s) => s.recentActions);
+  const systemState = useStore((s) => s.systemState);
   const gotoChapter = useStore((s) => s.gotoChapter);
   const switchSave = useStore((s) => s.switchSave);
   const openCreator = useStore((s) => s.openCreator);
@@ -100,6 +102,10 @@ export default function Reader() {
     list.push(a);
     notesByPara.set(a.paraIndex!, list);
   }
+
+  // 名场面 + 意难平
+  const famousScene = FAMOUS_SCENE_KEYWORDS.some((k) => currentContent.includes(k));
+  const regrets = systemState?.regrets ?? [];
 
   // 翻章后恢复到该章上次读到的位置（没记录则回到顶部）
   useEffect(() => {
@@ -191,14 +197,33 @@ export default function Reader() {
         className="animate-fade-in mx-auto max-w-2xl px-6 py-10"
         style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily: FONT_STACKS[fontFamily] }}
       >
-        {echoes.length > 0 && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
-            <div className="mb-1 text-xs font-medium">📌 回响</div>
-            {echoes.map((e) => (
-              <div key={e.id} className="text-xs leading-relaxed">
-                第{e.chapterIndex + 1}章「{e.content}」的影响，仍在延续。
+        {(famousScene || echoes.length > 0 || regrets.length > 0) && (
+          <div className="mb-6 space-y-2">
+            {famousScene && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                🎯 名场面：此处有重要剧情，选中文字可插入行动干预。
               </div>
-            ))}
+            )}
+            {echoes.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+                <div className="mb-1 font-medium">📌 回响</div>
+                {echoes.map((e) => (
+                  <div key={e.id} className="leading-relaxed">
+                    第{e.chapterIndex + 1}章「{e.content}」的影响，仍在延续。
+                  </div>
+                ))}
+              </div>
+            )}
+            {regrets.length > 0 && (
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-2 text-xs text-purple-800 dark:border-purple-700 dark:bg-purple-900/20 dark:text-purple-200">
+                <div className="mb-1 font-medium">🎯 我的意难平</div>
+                {regrets.map((r, i) => (
+                  <div key={i} className="leading-relaxed">
+                    · {r}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <h1 className="mb-8 text-center text-2xl font-bold">{chapter?.title}</h1>

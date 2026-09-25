@@ -148,6 +148,7 @@ async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
       redeemed: [],
       messages: ["系统已激活"],
       readChapters: [],
+      regrets: [],
     });
     sys = (await db.systemStates.get(id))!;
   }
@@ -323,6 +324,8 @@ interface AppState {
   importSave: (json: string) => Promise<string>;
   clearAllData: () => Promise<void>;
   redeem: (itemId: string) => Promise<void>;
+  addRegret: (text: string) => Promise<void>;
+  removeRegret: (index: number) => Promise<void>;
   refreshSavePoints: () => Promise<void>;
   createSavePoint: (name: string) => Promise<void>;
   autoSavePoint: () => Promise<void>;
@@ -873,6 +876,26 @@ export const useStore = create<AppState>((set, get) => ({
 
     await db.systemStates.update(systemState.id!, { points, redeemed, messages });
     set({ systemState: { ...systemState, points, redeemed, messages } });
+  },
+
+  // 意难平清单：最多 3 条
+  async addRegret(text: string) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const t = text.trim();
+    if (!t || (systemState.regrets?.length ?? 0) >= 3) return;
+    const regrets = [...(systemState.regrets ?? []), t];
+    await db.systemStates.update(systemState.id!, { regrets });
+    set({ systemState: { ...systemState, regrets } });
+  },
+
+  async removeRegret(index: number) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const regrets = [...(systemState.regrets ?? [])];
+    regrets.splice(index, 1);
+    await db.systemStates.update(systemState.id!, { regrets });
+    set({ systemState: { ...systemState, regrets } });
   },
 
   async refreshSavePoints() {

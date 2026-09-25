@@ -93,3 +93,9 @@ export function getShopItems(bookType: string | undefined): ShopItem[] {
   }
   return DEFAULT_SHOP;
 }
+
+// 名场面关键词（读到这些内容时提示"此处可干预"）
+export const FAMOUS_SCENE_KEYWORDS = [
+  "退婚", "决斗", "大比", "夺宝", "突破", "生死", "告白",
+  "背叛", "复仇", "结盟", "身世", "真相", "危机", "秘密", "传承",
+];

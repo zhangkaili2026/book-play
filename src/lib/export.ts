@@ -115,6 +115,7 @@ export interface SaveBackup {
     redeemed: { name: string; at: number }[];
     messages: string[];
     readChapters: number[];
+    regrets: string[];
   };
   savePoints?: SavePoint[];
 }
@@ -144,6 +145,7 @@ export function buildSaveBackup(ctx: {
       redeemed: ctx.systemState.redeemed,
       messages: ctx.systemState.messages,
       readChapters: ctx.systemState.readChapters,
+      regrets: ctx.systemState.regrets,
     },
     savePoints: ctx.savePoints,
   };
@@ -231,6 +233,7 @@ export async function importSaveBackup(json: string): Promise<string> {
       redeemed: data.systemState.redeemed ?? [],
       messages: data.systemState.messages ?? [],
       readChapters: data.systemState.readChapters ?? [],
+      regrets: data.systemState.regrets ?? [],
     });
   }
 

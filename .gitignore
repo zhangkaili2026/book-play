@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 用户自带的小说（不提交，避免版权/体积）
+samples/*.txt
+!samples/示例小说.txt

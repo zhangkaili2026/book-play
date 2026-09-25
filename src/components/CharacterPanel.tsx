@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { offsetTier } from "@/lib/actions";
-import { REDEEM_ITEMS, CATEGORY_LABEL, XP_PER_LEVEL } from "@/lib/system";
+import { TIER_ORDER, CATEGORY_LABEL, XP_PER_LEVEL } from "@/lib/system";
 
 type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
 
@@ -29,6 +29,7 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
   const systemState = useStore((s) => s.systemState);
   const redeem = useStore((s) => s.redeem);
+  const shopItems = useStore((s) => s.shopItems);
   const exportArchive = useStore((s) => s.exportArchiveMarkdown);
   const exportInfluence = useStore((s) => s.exportInfluenceMarkdown);
   const exportBackup = useStore((s) => s.exportSaveBackup);
@@ -40,6 +41,10 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const chapterTitle = chapterList[currentChapterIndex]?.title ?? "—";
   const bigEvents = recentActions.filter((a) => a.kind === "complex");
   const npcs = [...npcMemories].sort((a, b) => b.trust - a.trust);
+  const points = systemState?.points ?? 0;
+  const redeemedNames = new Set((systemState?.redeemed ?? []).map((r) => r.name));
+  // 有可兑换项（且未兑换）→ 系统 tab 亮小红点
+  const hasAffordable = shopItems.some((i) => points >= i.cost && !redeemedNames.has(i.name));
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 md:static md:h-full md:w-80 md:shrink-0">
@@ -110,6 +115,9 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
             }`}
           >
             {t.label}
+            {t.key === "system" && hasAffordable && (
+              <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+            )}
           </button>
         ))}
       </div>
@@ -305,38 +313,55 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* 兑换项 */}
+            {/* 商城（按难度分层） */}
             <div>
-              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">兑换</div>
-              <div className="space-y-2">
-                {REDEEM_ITEMS.map((item) => {
-                  const enough = (systemState?.points ?? 0) >= item.cost;
-                  const locked = offset >= 0.8;
-                  return (
-                    <div key={item.id} className="rounded border border-gray-200 p-2 dark:border-gray-700">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-800 dark:text-gray-200">
-                          {item.name}{" "}
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            ({CATEGORY_LABEL[item.category]})
-                          </span>
-                        </span>
-                        <span className="text-xs text-amber-600 dark:text-amber-400">
-                          {item.cost} 点
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
-                      <button
-                        onClick={() => redeem(item.id)}
-                        disabled={!enough || locked}
-                        className="mt-2 w-full rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40"
-                      >
-                        {locked ? "世界排斥，不可兑换" : enough ? "兑换" : "点数不足"}
-                      </button>
+              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">商城</div>
+              {TIER_ORDER.map((tier) => {
+                const items = shopItems.filter((i) => i.tier === tier);
+                if (!items.length) return null;
+                return (
+                  <div key={tier} className="mb-3">
+                    <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{tier}</div>
+                    <div className="space-y-2">
+                      {items.map((item) => {
+                        const redeemed = redeemedNames.has(item.name);
+                        const enough = points >= item.cost;
+                        const locked = offset >= 0.8;
+                        return (
+                          <div key={item.id} className="rounded border border-gray-200 p-2 dark:border-gray-700">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-gray-800 dark:text-gray-200">
+                                {item.name}
+                                {redeemed && (
+                                  <span className="ml-1 text-xs text-green-600 dark:text-green-400">已兑换</span>
+                                )}
+                                <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">
+                                  ({CATEGORY_LABEL[item.category]})
+                                </span>
+                              </span>
+                              <span className="text-xs text-amber-600 dark:text-amber-400">{item.cost} 点</span>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
+                            <button
+                              onClick={() => redeem(item.id)}
+                              disabled={redeemed || !enough || locked}
+                              className="mt-2 w-full rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40"
+                            >
+                              {redeemed
+                                ? "已兑换"
+                                : locked
+                                  ? "世界排斥，不可兑换"
+                                  : enough
+                                    ? "兑换"
+                                    : `还差 ${item.cost - points} 点`}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* 系统提示 */}

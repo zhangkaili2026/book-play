@@ -25,7 +25,7 @@ import {
 import { loadSettings, hasAIAccess, getUsage } from "./settings";
 import { callLLM, buildActionPrompt, generateBookTemplates } from "./ai";
 import { buildCacheKey, getCached, setCached, clearCache, getCacheCount } from "./cache";
-import { XP_RULES, REDEEM_ITEMS, XP_PER_LEVEL, POINTS_PER_LEVEL } from "./system";
+import { XP_RULES, DEFAULT_SHOP, getShopItems, XP_PER_LEVEL, POINTS_PER_LEVEL, type ShopItem } from "./system";
 import {
   download,
   buildArchiveMarkdown,
@@ -289,6 +289,7 @@ interface AppState {
   templates: { bookType: string; items: BookTemplateItem[] } | null; // 当前书 AI 生成的开局身份
   templatesLoading: boolean;
   savePoints: SavePoint[]; // 当前存档的存档点列表
+  shopItems: ShopItem[]; // 当前书的商城兑换项（按书籍类型生成）
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -360,6 +361,7 @@ export const useStore = create<AppState>((set, get) => ({
   templates: null,
   templatesLoading: false,
   savePoints: [],
+  shopItems: DEFAULT_SHOP,
 
   todayCost: 0,
   totalCost: 0,
@@ -464,6 +466,7 @@ export const useStore = create<AppState>((set, get) => ({
       templates: book?.templates ?? null,
       templatesLoading: false,
       savePoints: [],
+      shopItems: getShopItems(book?.templates?.bookType ?? undefined),
     });
 
     if (saves.length > 0) {
@@ -847,10 +850,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 兑换系统点数（本地规则，受偏移度约束）
   async redeem(itemId: string) {
-    const { currentSaveId, systemState, offset } = get();
+    const { currentSaveId, systemState, offset, shopItems } = get();
     if (currentSaveId == null || !systemState) return;
 
-    const item = REDEEM_ITEMS.find((i) => i.id === itemId);
+    const item = shopItems.find((i) => i.id === itemId);
     if (!item) return;
 
     // 偏移度 ≥0.8：系统拒绝兑换

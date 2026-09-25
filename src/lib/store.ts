@@ -15,6 +15,7 @@ import {
   type BookTemplateItem,
   type SavePoint,
   type Highlight,
+  type Bookmark,
 } from "./db";
 import { parseChapters } from "./parser";
 import {
@@ -215,6 +216,7 @@ async function cleanupOrphanData(): Promise<{ removed: number }> {
       await db.systemStates.where("saveId").equals(s.id!).delete();
       await db.savePoints.where("saveId").equals(s.id!).delete();
       await db.highlights.where("saveId").equals(s.id!).delete();
+      await db.bookmarks.where("saveId").equals(s.id!).delete();
       await db.saves.delete(s.id!);
       removed++;
     }
@@ -295,6 +297,7 @@ interface AppState {
   savePoints: SavePoint[]; // 当前存档的存档点列表
   shopItems: ShopItem[]; // 当前书的商城兑换项（按书籍类型生成）
   highlights: Highlight[]; // 当前存档的划线批注
+  bookmarks: Bookmark[]; // 当前存档的书签（标记想重读的章节）
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -333,6 +336,7 @@ interface AppState {
   addReadingSeconds: (n: number) => Promise<void>;
   addHighlight: (text: string) => Promise<void>;
   removeHighlight: (id: number) => Promise<void>;
+  toggleBookmark: () => Promise<void>;
   refreshSavePoints: () => Promise<void>;
   createSavePoint: (name: string) => Promise<void>;
   autoSavePoint: () => Promise<void>;
@@ -373,6 +377,7 @@ export const useStore = create<AppState>((set, get) => ({
   savePoints: [],
   shopItems: DEFAULT_SHOP,
   highlights: [],
+  bookmarks: [],
 
   todayCost: 0,
   totalCost: 0,
@@ -479,6 +484,7 @@ export const useStore = create<AppState>((set, get) => ({
       savePoints: [],
       shopItems: getShopItems(book?.templates?.bookType ?? undefined),
       highlights: [],
+      bookmarks: [],
     });
 
     if (saves.length > 0) {
@@ -535,6 +541,7 @@ export const useStore = create<AppState>((set, get) => ({
     const savePoints = await db.savePoints.where("saveId").equals(saveId).toArray();
     savePoints.sort((a, b) => b.createdAt - a.createdAt);
     const highlights = await db.highlights.where("saveId").equals(saveId).toArray();
+    const bookmarks = await db.bookmarks.where("saveId").equals(saveId).toArray();
 
     set({
       currentSaveId: saveId,
@@ -547,6 +554,7 @@ export const useStore = create<AppState>((set, get) => ({
       systemState,
       savePoints,
       highlights,
+      bookmarks,
     });
     await get().gotoChapter(save.lastChapterIndex);
   },
@@ -589,6 +597,7 @@ export const useStore = create<AppState>((set, get) => ({
     await db.systemStates.where("saveId").equals(saveId).delete();
     await db.savePoints.where("saveId").equals(saveId).delete();
     await db.highlights.where("saveId").equals(saveId).delete();
+    await db.bookmarks.where("saveId").equals(saveId).delete();
     await db.saves.delete(saveId);
 
     const saves =
@@ -612,6 +621,7 @@ export const useStore = create<AppState>((set, get) => ({
           systemState: null,
           savePoints: [],
           highlights: [],
+          bookmarks: [],
         });
         await get().gotoChapter(0);
       }
@@ -629,6 +639,7 @@ export const useStore = create<AppState>((set, get) => ({
       await db.systemStates.where("saveId").equals(s.id!).delete();
       await db.savePoints.where("saveId").equals(s.id!).delete();
       await db.highlights.where("saveId").equals(s.id!).delete();
+      await db.bookmarks.where("saveId").equals(s.id!).delete();
     }
     await db.saves.where("bookId").equals(bookId).delete();
     await db.chapters.where("bookId").equals(bookId).delete();
@@ -839,6 +850,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.systemStates.clear(),
       db.savePoints.clear(),
       db.highlights.clear(),
+      db.bookmarks.clear(),
     ]);
     localStorage.clear();
     set({
@@ -864,6 +876,7 @@ export const useStore = create<AppState>((set, get) => ({
       templatesLoading: false,
       savePoints: [],
       highlights: [],
+      bookmarks: [],
     });
   },
 
@@ -942,6 +955,23 @@ export const useStore = create<AppState>((set, get) => ({
     if (currentSaveId == null) return;
     const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
     set({ highlights });
+  },
+
+  async toggleBookmark() {
+    const { currentSaveId, currentChapterIndex, bookmarks } = get();
+    if (currentSaveId == null) return;
+    const existing = bookmarks.find((b) => b.chapterIndex === currentChapterIndex);
+    if (existing) {
+      await db.bookmarks.delete(existing.id!);
+    } else {
+      await db.bookmarks.add({
+        saveId: currentSaveId,
+        chapterIndex: currentChapterIndex,
+        createdAt: Date.now(),
+      });
+    }
+    const updated = await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
+    set({ bookmarks: updated });
   },
 
   async refreshSavePoints() {

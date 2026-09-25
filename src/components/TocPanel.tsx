@@ -7,6 +7,8 @@ export default function TocPanel({ onClose }: { onClose: () => void }) {
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
   const gotoChapter = useStore((s) => s.gotoChapter);
+  const bookmarks = useStore((s) => s.bookmarks);
+  const bookmarkSet = new Set(bookmarks.map((b) => b.chapterIndex));
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 md:static md:h-full md:w-72 md:shrink-0">
@@ -43,6 +45,7 @@ export default function TocPanel({ onClose }: { onClose: () => void }) {
               }`}
             >
               <span className="flex items-center gap-2 truncate">
+                {bookmarkSet.has(c.index) && <span className="text-xs">🔖</span>}
                 {read && !active && <span className="text-xs text-gray-400 dark:text-gray-500">✓</span>}
                 <span className={read && !active ? "text-gray-400 dark:text-gray-500" : ""}>
                   {c.title}

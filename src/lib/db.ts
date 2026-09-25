@@ -148,6 +148,14 @@ export interface Highlight {
   createdAt: number;
 }
 
+// —— 书签（标记想重读的章节）——
+export interface Bookmark {
+  id?: number;
+  saveId: number;
+  chapterIndex: number;
+  createdAt: number;
+}
+
 // —— 存档点（游戏状态快照，用于"玩崩了读档回退"）——
 export interface SavePoint {
   id?: number;
@@ -178,6 +186,7 @@ class BookPlayDB extends Dexie {
   systemStates!: Table<SystemState, number>;
   savePoints!: Table<SavePoint, number>;
   highlights!: Table<Highlight, number>;
+  bookmarks!: Table<Bookmark, number>;
 
   constructor() {
     super("bookplay");
@@ -207,6 +216,10 @@ class BookPlayDB extends Dexie {
     // v6：新增划线批注表
     this.version(6).stores({
       highlights: "++id, saveId, chapterIndex",
+    });
+    // v7：新增书签表
+    this.version(7).stores({
+      bookmarks: "++id, saveId, chapterIndex",
     });
   }
 }

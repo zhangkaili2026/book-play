@@ -53,6 +53,8 @@ export default function Reader() {
   const recentActions = useStore((s) => s.recentActions);
   const systemState = useStore((s) => s.systemState);
   const highlights = useStore((s) => s.highlights);
+  const bookmarks = useStore((s) => s.bookmarks);
+  const toggleBookmark = useStore((s) => s.toggleBookmark);
   const gotoChapter = useStore((s) => s.gotoChapter);
   const switchSave = useStore((s) => s.switchSave);
   const openCreator = useStore((s) => s.openCreator);
@@ -118,6 +120,7 @@ export default function Reader() {
   const regrets = systemState?.regrets ?? [];
   // 全书进度（0-100）
   const progress = chapterList.length > 0 ? ((currentChapterIndex + 1) / chapterList.length) * 100 : 0;
+  const isBookmarked = bookmarks.some((b) => b.chapterIndex === currentChapterIndex);
 
   // 翻章后恢复到该章上次读到的位置（没记录则回到顶部）
   useEffect(() => {
@@ -406,6 +409,17 @@ export default function Reader() {
             title="统计"
           >
             📊 统计
+          </button>
+          <button
+            onClick={toggleBookmark}
+            className={`rounded border px-2 py-1 ${
+              isBookmarked
+                ? "border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300"
+                : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+            }`}
+            title="书签（标记本章，方便找回）"
+          >
+            🔖
           </button>
           <span className="truncate text-sm text-gray-700 dark:text-gray-300">
             {chapter?.title}

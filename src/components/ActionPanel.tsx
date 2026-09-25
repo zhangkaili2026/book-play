@@ -12,6 +12,7 @@ export default function ActionPanel() {
   const selection = useStore((s) => s.selection);
   const submitAction = useStore((s) => s.submitAction);
   const openCreator = useStore((s) => s.openCreator);
+  const addHighlight = useStore((s) => s.addHighlight);
 
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -58,9 +59,18 @@ export default function ActionPanel() {
     <div className="border-t border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
       {/* 选区提示 */}
       {selection && (
-        <div className="mx-4 mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300">
-          📌 行动将锚定到第 {selection.paraIndex + 1} 段：「{selection.text.slice(0, 20)}
-          {selection.text.length > 20 ? "…" : ""}」
+        <div className="mx-4 mt-2 flex items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-1 text-xs text-amber-700 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300">
+          <span className="min-w-0 flex-1 truncate">
+            📌 第 {selection.paraIndex + 1} 段：「{selection.text.slice(0, 20)}
+            {selection.text.length > 20 ? "…" : ""}」
+          </span>
+          <button
+            onClick={() => addHighlight(selection.text)}
+            className="shrink-0 rounded border border-amber-400 px-2 py-0.5 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900/40"
+            title="划线（私人批注，不影响剧情）"
+          >
+            ✏️ 划线
+          </button>
         </div>
       )}
 

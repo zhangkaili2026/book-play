@@ -14,6 +14,7 @@ import {
   type SystemState,
   type BookTemplateItem,
   type SavePoint,
+  type Highlight,
 } from "./db";
 import { parseChapters } from "./parser";
 import {
@@ -213,6 +214,7 @@ async function cleanupOrphanData(): Promise<{ removed: number }> {
       await db.actions.where("saveId").equals(s.id!).delete();
       await db.systemStates.where("saveId").equals(s.id!).delete();
       await db.savePoints.where("saveId").equals(s.id!).delete();
+      await db.highlights.where("saveId").equals(s.id!).delete();
       await db.saves.delete(s.id!);
       removed++;
     }
@@ -292,6 +294,7 @@ interface AppState {
   templatesLoading: boolean;
   savePoints: SavePoint[]; // 当前存档的存档点列表
   shopItems: ShopItem[]; // 当前书的商城兑换项（按书籍类型生成）
+  highlights: Highlight[]; // 当前存档的划线批注
 
   // —— AI 消耗 ——
   todayCost: number;
@@ -328,6 +331,8 @@ interface AppState {
   addRegret: (text: string) => Promise<void>;
   removeRegret: (index: number) => Promise<void>;
   addReadingSeconds: (n: number) => Promise<void>;
+  addHighlight: (text: string) => Promise<void>;
+  removeHighlight: (id: number) => Promise<void>;
   refreshSavePoints: () => Promise<void>;
   createSavePoint: (name: string) => Promise<void>;
   autoSavePoint: () => Promise<void>;
@@ -367,6 +372,7 @@ export const useStore = create<AppState>((set, get) => ({
   templatesLoading: false,
   savePoints: [],
   shopItems: DEFAULT_SHOP,
+  highlights: [],
 
   todayCost: 0,
   totalCost: 0,
@@ -472,6 +478,7 @@ export const useStore = create<AppState>((set, get) => ({
       templatesLoading: false,
       savePoints: [],
       shopItems: getShopItems(book?.templates?.bookType ?? undefined),
+      highlights: [],
     });
 
     if (saves.length > 0) {
@@ -527,6 +534,7 @@ export const useStore = create<AppState>((set, get) => ({
     const systemState = await getOrCreateSystemState(saveId);
     const savePoints = await db.savePoints.where("saveId").equals(saveId).toArray();
     savePoints.sort((a, b) => b.createdAt - a.createdAt);
+    const highlights = await db.highlights.where("saveId").equals(saveId).toArray();
 
     set({
       currentSaveId: saveId,
@@ -538,6 +546,7 @@ export const useStore = create<AppState>((set, get) => ({
       npcMemories,
       systemState,
       savePoints,
+      highlights,
     });
     await get().gotoChapter(save.lastChapterIndex);
   },
@@ -579,6 +588,7 @@ export const useStore = create<AppState>((set, get) => ({
     await db.actions.where("saveId").equals(saveId).delete();
     await db.systemStates.where("saveId").equals(saveId).delete();
     await db.savePoints.where("saveId").equals(saveId).delete();
+    await db.highlights.where("saveId").equals(saveId).delete();
     await db.saves.delete(saveId);
 
     const saves =
@@ -601,6 +611,7 @@ export const useStore = create<AppState>((set, get) => ({
           npcMemories: [],
           systemState: null,
           savePoints: [],
+          highlights: [],
         });
         await get().gotoChapter(0);
       }
@@ -617,6 +628,7 @@ export const useStore = create<AppState>((set, get) => ({
       await db.actions.where("saveId").equals(s.id!).delete();
       await db.systemStates.where("saveId").equals(s.id!).delete();
       await db.savePoints.where("saveId").equals(s.id!).delete();
+      await db.highlights.where("saveId").equals(s.id!).delete();
     }
     await db.saves.where("bookId").equals(bookId).delete();
     await db.chapters.where("bookId").equals(bookId).delete();
@@ -826,6 +838,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.aiCache.clear(),
       db.systemStates.clear(),
       db.savePoints.clear(),
+      db.highlights.clear(),
     ]);
     localStorage.clear();
     set({
@@ -850,6 +863,7 @@ export const useStore = create<AppState>((set, get) => ({
       templates: null,
       templatesLoading: false,
       savePoints: [],
+      highlights: [],
     });
   },
 
@@ -906,6 +920,28 @@ export const useStore = create<AppState>((set, get) => ({
     const readingSeconds = (systemState.readingSeconds ?? 0) + n;
     await db.systemStates.update(systemState.id!, { readingSeconds });
     set({ systemState: { ...systemState, readingSeconds } });
+  },
+
+  async addHighlight(text: string) {
+    const { currentSaveId, currentChapterIndex, selection } = get();
+    if (currentSaveId == null || !text.trim() || selection == null) return;
+    await db.highlights.add({
+      saveId: currentSaveId,
+      chapterIndex: currentChapterIndex,
+      paraIndex: selection.paraIndex,
+      text: text.trim(),
+      createdAt: Date.now(),
+    });
+    const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
+    set({ highlights });
+  },
+
+  async removeHighlight(id: number) {
+    await db.highlights.delete(id);
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
+    set({ highlights });
   },
 
   async refreshSavePoints() {

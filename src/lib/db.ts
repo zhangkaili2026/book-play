@@ -138,6 +138,16 @@ export interface SystemState {
   readingSeconds: number;  // 累计阅读时长（秒）
 }
 
+// —— 划线批注（选中原文划线，私人笔记，不影响剧情）——
+export interface Highlight {
+  id?: number;
+  saveId: number;
+  chapterIndex: number;
+  paraIndex: number;
+  text: string;           // 划线的文字
+  createdAt: number;
+}
+
 // —— 存档点（游戏状态快照，用于"玩崩了读档回退"）——
 export interface SavePoint {
   id?: number;
@@ -167,6 +177,7 @@ class BookPlayDB extends Dexie {
   aiCache!: Table<AiCacheEntry, number>;
   systemStates!: Table<SystemState, number>;
   savePoints!: Table<SavePoint, number>;
+  highlights!: Table<Highlight, number>;
 
   constructor() {
     super("bookplay");
@@ -192,6 +203,10 @@ class BookPlayDB extends Dexie {
     // v5：新增存档点表（快照，用于读档回退）
     this.version(5).stores({
       savePoints: "++id, saveId, createdAt",
+    });
+    // v6：新增划线批注表
+    this.version(6).stores({
+      highlights: "++id, saveId, chapterIndex",
     });
   }
 }

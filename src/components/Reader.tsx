@@ -52,6 +52,7 @@ export default function Reader() {
   const pureReadMode = useStore((s) => s.pureReadMode);
   const recentActions = useStore((s) => s.recentActions);
   const systemState = useStore((s) => s.systemState);
+  const highlights = useStore((s) => s.highlights);
   const gotoChapter = useStore((s) => s.gotoChapter);
   const switchSave = useStore((s) => s.switchSave);
   const openCreator = useStore((s) => s.openCreator);
@@ -101,6 +102,15 @@ export default function Reader() {
     const list = notesByPara.get(a.paraIndex!) ?? [];
     list.push(a);
     notesByPara.set(a.paraIndex!, list);
+  }
+
+  // 本章划线 → 按段落分组
+  const chapterHighlights = highlights.filter((h) => h.chapterIndex === currentChapterIndex);
+  const highlightByPara = new Map<number, typeof chapterHighlights>();
+  for (const h of chapterHighlights) {
+    const list = highlightByPara.get(h.paraIndex) ?? [];
+    list.push(h);
+    highlightByPara.set(h.paraIndex, list);
   }
 
   // 名场面 + 意难平
@@ -244,10 +254,16 @@ export default function Reader() {
         <h1 className="mb-8 text-center text-2xl font-bold">{chapter?.title}</h1>
         {paragraphs.map((para, i) => {
           const notes = notesByPara.get(i) ?? [];
+          const hls = highlightByPara.get(i) ?? [];
           if (para.trim() === "") return <div key={i} className="h-4" />;
           return (
             <div key={i} className="mb-3">
-              <p data-para-index={i} className="text-justify indent-8">
+              <p
+                data-para-index={i}
+                className={`text-justify indent-8 ${
+                  hls.length ? "rounded bg-yellow-100 dark:bg-yellow-900/30" : ""
+                }`}
+              >
                 {para}
                 {notes.map((a) => (
                   <button
@@ -262,6 +278,14 @@ export default function Reader() {
                     {a.kind === "complex" ? "📈" : "💡"}
                   </button>
                 ))}
+                {hls.length > 0 && (
+                  <span
+                    className="ml-1 align-super text-xs"
+                    title={hls.map((h) => h.text).join("；")}
+                  >
+                    🖍️
+                  </span>
+                )}
               </p>
             </div>
           );

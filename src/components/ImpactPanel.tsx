@@ -16,6 +16,8 @@ export default function ImpactPanel({
 }) {
   const offset = useStore((s) => s.offset);
   const recentActions = useStore((s) => s.recentActions);
+  const highlights = useStore((s) => s.highlights);
+  const removeHighlight = useStore((s) => s.removeHighlight);
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 md:static md:h-full md:w-80 md:shrink-0">
@@ -44,6 +46,35 @@ export default function ImpactPanel({
             style={{ width: `${offset * 100}%` }}
           />
         </div>
+      </div>
+
+      {/* 划线批注 */}
+      <div className="border-b border-gray-100 p-3 dark:border-gray-800">
+        <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          🖍️ 划线（{highlights.length}）
+        </div>
+        {highlights.length ? (
+          <div className="space-y-1">
+            {highlights.map((h) => (
+              <div key={h.id} className="flex items-start justify-between gap-2 text-xs">
+                <span className="text-gray-600 dark:text-gray-400">
+                  第{h.chapterIndex + 1}章 · {h.text.slice(0, 30)}
+                  {h.text.length > 30 ? "…" : ""}
+                </span>
+                <button
+                  onClick={() => removeHighlight(h.id!)}
+                  className="shrink-0 text-gray-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            选中正文后点「✏️ 划线」，划过的段落会高亮。
+          </p>
+        )}
       </div>
 
       {/* 行动影响记录 */}

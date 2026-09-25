@@ -11,6 +11,7 @@ import SearchPanel from "@/components/SearchPanel";
 import StatsPanel from "@/components/StatsPanel";
 import TTSBar from "@/components/TTSBar";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
+import { db, type ActionRecord } from "@/lib/db";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -65,6 +66,7 @@ export default function Reader() {
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
+  const [echoes, setEchoes] = useState<ActionRecord[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -128,6 +130,25 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // 影响回响：早期复杂行动在后续章节的"回音"（本地，0 token）
+  useEffect(() => {
+    if (currentSaveId == null) {
+      setEchoes([]);
+      return;
+    }
+    db.actions
+      .where("saveId")
+      .equals(currentSaveId)
+      .toArray()
+      .then((arr) => {
+        const past = arr
+          .filter((a) => a.kind === "complex" && a.chapterIndex < currentChapterIndex)
+          .sort((a, b) => b.chapterIndex - a.chapterIndex)
+          .slice(0, 3);
+        setEchoes(past);
+      });
+  }, [currentSaveId, currentChapterIndex]);
+
   // 捕获选中的段落（selectionchange + 防抖，鼠标/触摸通用，支持手机）
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -170,6 +191,16 @@ export default function Reader() {
         className="animate-fade-in mx-auto max-w-2xl px-6 py-10"
         style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily: FONT_STACKS[fontFamily] }}
       >
+        {echoes.length > 0 && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+            <div className="mb-1 text-xs font-medium">📌 回响</div>
+            {echoes.map((e) => (
+              <div key={e.id} className="text-xs leading-relaxed">
+                第{e.chapterIndex + 1}章「{e.content}」的影响，仍在延续。
+              </div>
+            ))}
+          </div>
+        )}
         <h1 className="mb-8 text-center text-2xl font-bold">{chapter?.title}</h1>
         {paragraphs.map((para, i) => {
           const notes = notesByPara.get(i) ?? [];

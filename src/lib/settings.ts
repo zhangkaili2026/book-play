@@ -122,3 +122,57 @@ export function getUsage() {
 export function clearUsage(): void {
   localStorage.removeItem(USAGE_KEY);
 }
+
+// —— 每日阅读时长 + 阅读目标 ——
+const DAILY_KEY = "bookplay.dailyReading";
+const GOAL_KEY = "bookplay.readingGoal";
+
+export function addDailyReadingSeconds(n: number): void {
+  const today = new Date().toISOString().slice(0, 10);
+  let data = { date: today, seconds: 0 };
+  try {
+    const raw = localStorage.getItem(DAILY_KEY);
+    if (raw) data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  if (data.date !== today) data = { date: today, seconds: 0 };
+  data.seconds += n;
+  try {
+    localStorage.setItem(DAILY_KEY, JSON.stringify(data));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getTodayReadingSeconds(): number {
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const raw = localStorage.getItem(DAILY_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.date === today) return data.seconds;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 0;
+}
+
+export function getReadingGoalMinutes(): number {
+  try {
+    const v = localStorage.getItem(GOAL_KEY);
+    if (v) return Math.max(0, Number(v) || 0);
+  } catch {
+    /* ignore */
+  }
+  return 30;
+}
+
+export function setReadingGoalMinutes(n: number): void {
+  try {
+    localStorage.setItem(GOAL_KEY, String(Math.max(0, n)));
+  } catch {
+    /* ignore */
+  }
+}

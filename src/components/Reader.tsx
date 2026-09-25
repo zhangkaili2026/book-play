@@ -13,6 +13,7 @@ import TTSBar from "@/components/TTSBar";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
 import { db, type ActionRecord } from "@/lib/db";
 import { FAMOUS_SCENE_KEYWORDS } from "@/lib/system";
+import { addDailyReadingSeconds } from "@/lib/settings";
 
 const FONT_STACKS: Record<FontChoice, string> = {
   serif: '"Songti SC", "SimSun", "STSong", serif',
@@ -156,6 +157,7 @@ export default function Reader() {
     if (currentSaveId == null) return;
     const timer = setInterval(() => {
       useStore.getState().addReadingSeconds(60);
+      addDailyReadingSeconds(60);
     }, 60000);
     return () => clearInterval(timer);
   }, [currentSaveId]);

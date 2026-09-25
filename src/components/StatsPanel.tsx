@@ -6,6 +6,7 @@ import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
 import { generateShareCard } from "@/lib/shareCard";
+import { getTodayReadingSeconds, getReadingGoalMinutes } from "@/lib/settings";
 
 function formatSeconds(s: number): string {
   if (s < 60) return `${s}秒`;
@@ -100,6 +101,11 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
   const complexActions = allActions.filter((a) => a.kind === "complex");
   const bookTitle = books.find((b) => b.id === currentBookId)?.title ?? "未命名";
   const pcName = currentPC?.name ?? "我";
+  const todaySeconds = getTodayReadingSeconds();
+  const goalMinutes = getReadingGoalMinutes();
+  const goalSeconds = goalMinutes * 60;
+  const goalPercent = goalSeconds > 0 ? Math.min(100, (todaySeconds / goalSeconds) * 100) : 0;
+  const goalMet = goalSeconds > 0 && todaySeconds >= goalSeconds;
   const reportMd = [
     "# 我的书游报告",
     "",
@@ -149,6 +155,22 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           {stat("系统点数", `${systemState?.points ?? 0}`)}
           {stat("偏移度", offset.toFixed(2))}
           {stat("阅读时长", formatSeconds(systemState?.readingSeconds ?? 0))}
+        </div>
+
+        {/* 今日阅读目标 */}
+        <div className="mt-4 rounded border border-gray-200 p-3 dark:border-gray-700">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="font-medium text-gray-700 dark:text-gray-300">今日阅读</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {formatSeconds(todaySeconds)} / 目标 {goalMinutes} 分钟{goalMet ? " ✅ 已达标" : ""}
+            </span>
+          </div>
+          <div className="h-2 rounded bg-gray-200 dark:bg-gray-700">
+            <div
+              className="h-2 rounded bg-green-500"
+              style={{ width: `${goalPercent}%` }}
+            />
+          </div>
         </div>
 
         {/* 偏移度趋势 */}

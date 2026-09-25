@@ -6,6 +6,8 @@ import {
   saveSettings,
   clearUsage,
   applyProviderPreset,
+  getReadingGoalMinutes,
+  setReadingGoalMinutes,
   type AISettings,
   type AIProvider,
 } from "@/lib/settings";
@@ -32,6 +34,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const [s, setS] = useState<AISettings>(loadSettings());
   const [importMsg, setImportMsg] = useState("");
+  const [goal, setGoal] = useState(getReadingGoalMinutes());
 
   function update<K extends keyof AISettings>(key: K, value: AISettings[K]) {
     setS((prev) => ({ ...prev, [key]: value }));
@@ -43,6 +46,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
   function handleSave() {
     saveSettings(s);
+    setReadingGoalMinutes(goal);
     refreshUsage();
     onClose();
   }
@@ -117,6 +121,20 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               step="0.1"
               value={s.dailyBudget}
               onChange={(e) => update("dailyBudget", Number(e.target.value))}
+              className={inputCls}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-gray-600 dark:text-gray-400">
+              每日阅读目标（分钟，0 = 不设）
+            </span>
+            <input
+              type="number"
+              min="0"
+              step="5"
+              value={goal}
+              onChange={(e) => setGoal(Number(e.target.value))}
               className={inputCls}
             />
           </label>

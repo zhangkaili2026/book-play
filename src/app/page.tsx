@@ -8,6 +8,7 @@ import CharacterCreator from "@/components/CharacterCreator";
 import SettingsModal from "@/components/SettingsModal";
 import ThemeToggle from "@/components/ThemeToggle";
 import MurderMystery from "@/components/MurderMystery";
+import HelpModal from "@/components/HelpModal";
 
 export default function Home() {
   const books = useStore((s) => s.books);
@@ -20,6 +21,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [murderOpen, setMurderOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   useEffect(() => {
     loadBooks();
@@ -92,6 +94,13 @@ export default function Home() {
           🎭 剧本杀
         </button>
         <button
+          onClick={() => setHelpOpen(true)}
+          className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+          title="使用帮助"
+        >
+          ❓
+        </button>
+        <button
           onClick={() => setSettingsOpen(true)}
           className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
           title="AI 设置"
@@ -126,6 +135,9 @@ export default function Home() {
 
       {/* 剧本杀 */}
       {murderOpen && <MurderMystery onClose={() => setMurderOpen(false)} />}
+
+      {/* 使用帮助 */}
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

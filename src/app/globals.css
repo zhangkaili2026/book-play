@@ -19,3 +19,37 @@ body {
   color: #e5e7eb;
   background: #0f172a;
 }
+
+/* 翻页淡入过渡 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+/* 阅读区滚动条美化（细、淡） */
+.reading-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.35) transparent;
+}
+.reading-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.reading-scroll::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.35);
+  border-radius: 4px;
+}
+.reading-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.55);
+}
+.reading-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -64,6 +64,7 @@ export default function Reader() {
   >(null);
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
+  const [immersive, setImmersive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -118,6 +119,15 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", onKey);
   }, [currentChapterIndex, hasPrev, hasNext, gotoChapter]);
 
+  // Esc 退出沉浸模式
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setImmersive(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // 捕获选中的段落（selectionchange + 防抖，鼠标/触摸通用，支持手机）
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -146,6 +156,64 @@ export default function Reader() {
 
   const btnCls =
     "rounded border border-gray-300 px-2 py-1 dark:border-gray-600";
+
+  // 正文区（沉浸模式全屏，普通模式 flex-1）
+  const readingArea = (
+    <div
+      ref={scrollRef}
+      className={`reading-scroll overflow-y-auto ${immersive ? "h-full" : "flex-1"}`}
+      style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
+      onScroll={handleScroll}
+    >
+      <article
+        key={currentChapterIndex}
+        className="animate-fade-in mx-auto max-w-2xl px-6 py-10"
+        style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily: FONT_STACKS[fontFamily] }}
+      >
+        <h1 className="mb-8 text-center text-2xl font-bold">{chapter?.title}</h1>
+        {paragraphs.map((para, i) => {
+          const notes = notesByPara.get(i) ?? [];
+          if (para.trim() === "") return <div key={i} className="h-4" />;
+          return (
+            <div key={i} className="mb-3">
+              <p data-para-index={i} className="text-justify indent-8">
+                {para}
+                {notes.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      setFocusActionId(a.id!);
+                      setSidePanel("impact");
+                    }}
+                    className="mx-1 align-super text-sm leading-none"
+                    title={a.content}
+                  >
+                    {a.kind === "complex" ? "📈" : "💡"}
+                  </button>
+                ))}
+              </p>
+            </div>
+          );
+        })}
+      </article>
+    </div>
+  );
+
+  // 沉浸模式：只显示正文 + 退出按钮
+  if (immersive) {
+    return (
+      <div className="relative h-full">
+        {readingArea}
+        <button
+          onClick={() => setImmersive(false)}
+          className="fixed right-4 top-4 z-40 rounded-full border border-gray-300 bg-white/80 px-3 py-1 text-sm text-gray-600 shadow-sm hover:bg-white dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-300"
+          title="退出沉浸模式（Esc）"
+        >
+          ✕ 退出沉浸
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -329,47 +397,18 @@ export default function Reader() {
             >
               👁 纯阅读
             </button>
+            <button
+              onClick={() => setImmersive(true)}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              title="沉浸模式（只留正文，Esc 退出）"
+            >
+              🕶 沉浸
+            </button>
           </div>
         </div>
 
         {/* 正文区（可滚动，含旁注图标） */}
-        <div
-          ref={scrollRef}
-          className="flex-1 overflow-y-auto"
-          style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
-          onScroll={handleScroll}
-        >
-          <article
-            className="mx-auto max-w-2xl px-6 py-10"
-            style={{ fontSize: `${fontSize}px`, lineHeight, fontFamily: FONT_STACKS[fontFamily] }}
-          >
-            <h1 className="mb-8 text-center text-2xl font-bold">{chapter?.title}</h1>
-            {paragraphs.map((para, i) => {
-              const notes = notesByPara.get(i) ?? [];
-              if (para.trim() === "") return <div key={i} className="h-4" />;
-              return (
-                <div key={i} className="mb-3">
-                  <p data-para-index={i} className="text-justify indent-8">
-                    {para}
-                    {notes.map((a) => (
-                      <button
-                        key={a.id}
-                        onClick={() => {
-                          setFocusActionId(a.id!);
-                          setSidePanel("impact");
-                        }}
-                        className="mx-1 align-super text-sm leading-none"
-                        title={a.content}
-                      >
-                        {a.kind === "complex" ? "📈" : "💡"}
-                      </button>
-                    ))}
-                  </p>
-                </div>
-              );
-            })}
-          </article>
-        </div>
+        {readingArea}
 
         {/* 底栏：上一章 / 下一章 */}
         <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">

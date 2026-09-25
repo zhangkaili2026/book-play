@@ -5,6 +5,7 @@ import { db, type ActionRecord } from "@/lib/db";
 import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
+import { generateShareCard } from "@/lib/shareCard";
 
 // 偏移度趋势曲线（单色折线 + 分级参考线，纯 SVG 无依赖）
 function OffsetSparkline({ trend }: { trend: number[] }) {
@@ -60,6 +61,9 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
   const offset = useStore((s) => s.offset);
   const npcMemories = useStore((s) => s.npcMemories);
   const systemState = useStore((s) => s.systemState);
+  const books = useStore((s) => s.books);
+  const currentBookId = useStore((s) => s.currentBookId);
+  const currentPC = useStore((s) => s.currentPC);
 
   const [allActions, setAllActions] = useState<ActionRecord[]>([]);
 
@@ -88,6 +92,8 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
 
   const ending = getEnding(offset);
   const complexActions = allActions.filter((a) => a.kind === "complex");
+  const bookTitle = books.find((b) => b.id === currentBookId)?.title ?? "未命名";
+  const pcName = currentPC?.name ?? "我";
   const reportMd = [
     "# 我的书游报告",
     "",
@@ -158,12 +164,33 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">结局与报告</span>
-            <button
-              onClick={() => download("我的书游报告.md", reportMd)}
-              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-            >
-              导出报告
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() =>
+                  generateShareCard({
+                    pcName,
+                    bookTitle,
+                    ending,
+                    offset,
+                    offsetTier: offsetTier(offset),
+                    actionCount: allActions.length,
+                    complexCount: complexActions.length,
+                    npcCount: npcMemories.length,
+                    level: systemState?.level ?? 1,
+                    complexActions,
+                  })
+                }
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                分享卡片
+              </button>
+              <button
+                onClick={() => download("我的书游报告.md", reportMd)}
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                导出报告
+              </button>
+            </div>
           </div>
 
           <div className="rounded border border-gray-200 p-3 dark:border-gray-700">

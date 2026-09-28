@@ -90,6 +90,27 @@ export default function Reader() {
     }, 150);
   }
 
+  // 移动端左右滑翻章（横向滑动超过阈值才触发，不干扰上下滚动和长按选词）
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0 && hasNext) gotoChapter(currentChapterIndex + 1);
+      else if (dx > 0 && hasPrev) gotoChapter(currentChapterIndex - 1);
+    }
+  }
+
   const chapter = chapterList[currentChapterIndex];
   const hasPrev = currentChapterIndex > 0;
   const hasNext = currentChapterIndex < chapterList.length - 1;
@@ -217,6 +238,8 @@ export default function Reader() {
       className={`reading-scroll overflow-y-auto ${immersive ? "h-full" : "flex-1"}`}
       style={{ backgroundColor: bgStyle.bg, color: bgStyle.text }}
       onScroll={handleScroll}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       {/* 全书进度条（细、吸顶） */}
       <div className="sticky top-0 z-10 h-0.5 w-full bg-gray-200/60 dark:bg-gray-700/60">

@@ -5,7 +5,7 @@ import { db, type ActionRecord } from "@/lib/db";
 import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
-import { generateShareCard } from "@/lib/shareCard";
+import { generateShareCard, type ShareTheme } from "@/lib/shareCard";
 import { getTodayReadingSeconds, getReadingGoalMinutes, getReadingStreak, getLastNDays, recordEnding, getReachedEndings } from "@/lib/settings";
 import { ACHIEVEMENTS, checkAchievements } from "@/lib/achievements";
 
@@ -86,6 +86,7 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
   const currentPC = useStore((s) => s.currentPC);
 
   const [allActions, setAllActions] = useState<ActionRecord[]>([]);
+  const [shareTheme, setShareTheme] = useState<ShareTheme>("默认");
 
   useEffect(() => {
     if (currentSaveId == null) {
@@ -284,7 +285,7 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
                     npcCount: npcMemories.length,
                     level: systemState?.level ?? 1,
                     complexActions,
-                  })
+                  }, shareTheme)
                 }
                 className="text-xs text-blue-600 hover:underline dark:text-blue-400"
               >
@@ -302,6 +303,23 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           <div className="rounded border border-gray-200 p-3 dark:border-gray-700">
             <div className="mb-1 font-medium text-gray-900 dark:text-gray-100">🎬 {ending.label}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400">{ending.desc}</p>
+          </div>
+
+          <div className="mt-2 flex items-center gap-1">
+            <span className="text-xs text-gray-400 dark:text-gray-500">卡片主题</span>
+            {(["默认", "修仙风", "权谋风", "暗黑风"] as ShareTheme[]).map((th) => (
+              <button
+                key={th}
+                onClick={() => setShareTheme(th)}
+                className={`rounded px-2 py-0.5 text-xs ${
+                  shareTheme === th
+                    ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"
+                    : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+                }`}
+              >
+                {th}
+              </button>
+            ))}
           </div>
 
           <pre className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs leading-relaxed text-gray-600 dark:bg-gray-800 dark:text-gray-300">

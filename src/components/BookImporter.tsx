@@ -2,10 +2,12 @@
 
 import { useRef, useState } from "react";
 import { useStore } from "@/lib/store";
+import { PRESET_STORIES } from "@/lib/presets";
 
 // 空状态下的全屏导入区：拖拽或点击选择 .txt 文件
 export default function BookImporter() {
   const importBook = useStore((s) => s.importBook);
+  const importPreset = useStore((s) => s.importPreset);
   const loading = useStore((s) => s.loading);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -19,7 +21,7 @@ export default function BookImporter() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -58,6 +60,25 @@ export default function BookImporter() {
         <p className="text-xs text-gray-400 dark:text-gray-500">
           原文永不改写 · 数据只存在你浏览器本地 · 看书 0 消耗
         </p>
+      </div>
+
+      {/* 预设剧本 */}
+      <div className="w-full max-w-lg">
+        <p className="mb-2 text-center text-sm text-gray-500 dark:text-gray-400">
+          或者，从预设剧本直接开始（没带书也能玩）：
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {PRESET_STORIES.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => importPreset(p.title, p.content)}
+              className="rounded-xl border border-gray-200 bg-white p-3 text-left transition-colors hover:border-blue-400 dark:border-gray-700 dark:bg-gray-900 dark:hover:border-blue-500"
+            >
+              <div className="font-medium text-gray-900 dark:text-gray-100">{p.title}</div>
+              <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">{p.type} · 短篇</div>
+            </button>
+          ))}
+        </div>
       </div>
     </main>
   );

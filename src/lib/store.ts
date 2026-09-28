@@ -316,6 +316,7 @@ interface AppState {
   // —— 动作 ——
   loadBooks: () => Promise<void>;
   importBook: (file: File) => Promise<void>;
+  importPreset: (title: string, text: string) => Promise<void>;
   openBook: (bookId: number) => Promise<void>;
   gotoChapter: (index: number) => Promise<void>;
   switchSave: (saveId: number) => Promise<void>;
@@ -437,6 +438,54 @@ export const useStore = create<AppState>((set, get) => ({
       );
 
       // 分析书籍类型 + 生成开局身份（AI 一次，缓存到书；失败则用通用模板）
+      set({ templatesLoading: true });
+      let templates: { bookType: string; items: BookTemplateItem[] } | null = null;
+      if (hasAIAccess()) {
+        try {
+          templates = await generateBookTemplates(title, parsed[0]?.content ?? "");
+          await db.books.update(bookId, { templates });
+        } catch {
+          templates = null;
+        }
+      }
+      set({ templates, templatesLoading: false });
+
+      await get().loadBooks();
+      await get().openBook(bookId);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  async importPreset(title: string, text: string) {
+    set({ loading: true });
+    try {
+      const parsed = parseChapters(text);
+      if (parsed.length === 0) {
+        alert("预设剧本解析失败");
+        return;
+      }
+      const totalChars = parsed.reduce((sum, c) => sum + c.content.length, 0);
+      const bookId = await db.books.add({
+        title,
+        author: "",
+        totalChars,
+        chapterCount: parsed.length,
+        createdAt: Date.now(),
+        lastReadIndex: 0,
+      });
+      await db.chapters.bulkAdd(
+        parsed.map((c, i) => ({
+          bookId,
+          index: i,
+          title: c.title,
+          content: c.content,
+          charCount: c.content.length,
+          nodes: [],
+          actions: [],
+        }))
+      );
+
       set({ templatesLoading: true });
       let templates: { bookType: string; items: BookTemplateItem[] } | null = null;
       if (hasAIAccess()) {

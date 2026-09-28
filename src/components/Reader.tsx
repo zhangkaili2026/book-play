@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore, type FontChoice, type ReadingBgChoice } from "@/lib/store";
 import ActionPanel from "@/components/ActionPanel";
-import CharacterPanel from "@/components/CharacterPanel";
+import CharacterPanel, { type Tab } from "@/components/CharacterPanel";
 import TocPanel from "@/components/TocPanel";
 import ImpactPanel from "@/components/ImpactPanel";
 import SavePanel from "@/components/SavePanel";
@@ -69,6 +69,7 @@ export default function Reader() {
   const [sidePanel, setSidePanel] = useState<
     "toc" | "character" | "impact" | "save" | "search" | "stats" | null
   >(null);
+  const [characterTab, setCharacterTab] = useState<Tab>("profile");
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
@@ -386,10 +387,24 @@ export default function Reader() {
                 ＋新存档
               </button>
               <button
-                onClick={() => setSidePanel(sidePanel === "character" ? null : "character")}
+                onClick={() => {
+                  setCharacterTab("profile");
+                  setSidePanel("character");
+                }}
                 className="rounded border border-blue-300 px-2 py-0.5 text-xs text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                title="角色档案"
               >
                 📋 角色
+              </button>
+              <button
+                onClick={() => {
+                  setCharacterTab("system");
+                  setSidePanel("character");
+                }}
+                className="rounded border border-purple-300 px-2 py-0.5 text-xs text-purple-600 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                title="系统（商城 / 支线任务 / 意难平）"
+              >
+                🎮 系统
               </button>
             </div>
           )}
@@ -580,7 +595,13 @@ export default function Reader() {
       {sidePanel === "save" && <SavePanel onClose={() => setSidePanel(null)} />}
       {sidePanel === "search" && <SearchPanel onClose={() => setSidePanel(null)} />}
       {sidePanel === "stats" && <StatsPanel onClose={() => setSidePanel(null)} />}
-      {sidePanel === "character" && <CharacterPanel onClose={() => setSidePanel(null)} />}
+      {sidePanel === "character" && (
+        <CharacterPanel
+          key={characterTab}
+          initialTab={characterTab}
+          onClose={() => setSidePanel(null)}
+        />
+      )}
     </div>
   );
 }

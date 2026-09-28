@@ -5,7 +5,7 @@ import { useStore } from "@/lib/store";
 import { offsetTier } from "@/lib/actions";
 import { TIER_ORDER, CATEGORY_LABEL, XP_PER_LEVEL } from "@/lib/system";
 
-type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
+export type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "profile", label: "档案" },
@@ -20,7 +20,13 @@ const TABS: { key: Tab; label: string }[] = [
 const KIND_LABEL = { simple: "简单", medium: "中等", complex: "复杂" } as const;
 
 // 成长面板：随当前章节/存档动态更新的侧边栏（桌面侧栏 / 移动端全屏）
-export default function CharacterPanel({ onClose }: { onClose: () => void }) {
+export default function CharacterPanel({
+  onClose,
+  initialTab,
+}: {
+  onClose: () => void;
+  initialTab?: Tab;
+}) {
   const currentPC = useStore((s) => s.currentPC);
   const npcMemories = useStore((s) => s.npcMemories);
   const recentActions = useStore((s) => s.recentActions);
@@ -38,7 +44,7 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const exportArchive = useStore((s) => s.exportArchiveMarkdown);
   const exportInfluence = useStore((s) => s.exportInfluenceMarkdown);
   const exportBackup = useStore((s) => s.exportSaveBackup);
-  const [tab, setTab] = useState<Tab>("profile");
+  const [tab, setTab] = useState<Tab>(initialTab ?? "profile");
   const [menuOpen, setMenuOpen] = useState(false);
   const [regretText, setRegretText] = useState("");
   const [questText, setQuestText] = useState("");

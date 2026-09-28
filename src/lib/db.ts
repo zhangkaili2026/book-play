@@ -136,6 +136,7 @@ export interface SystemState {
   readChapters: number[];  // 已读章节（用于"读新章节"经验判定）
   regrets: string[];       // 意难平清单（玩家最想改变的事，最多 3 条）
   readingSeconds: number;  // 累计阅读时长（秒）
+  quests: { text: string; done: boolean }[]; // 支线任务板
 }
 
 // —— 划线批注（选中原文划线，私人笔记，不影响剧情）——

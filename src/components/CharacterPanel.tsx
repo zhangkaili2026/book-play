@@ -32,12 +32,16 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
   const shopItems = useStore((s) => s.shopItems);
   const addRegret = useStore((s) => s.addRegret);
   const removeRegret = useStore((s) => s.removeRegret);
+  const addQuest = useStore((s) => s.addQuest);
+  const toggleQuest = useStore((s) => s.toggleQuest);
+  const removeQuest = useStore((s) => s.removeQuest);
   const exportArchive = useStore((s) => s.exportArchiveMarkdown);
   const exportInfluence = useStore((s) => s.exportInfluenceMarkdown);
   const exportBackup = useStore((s) => s.exportSaveBackup);
   const [tab, setTab] = useState<Tab>("profile");
   const [menuOpen, setMenuOpen] = useState(false);
   const [regretText, setRegretText] = useState("");
+  const [questText, setQuestText] = useState("");
 
   if (!currentPC) return null;
 
@@ -227,6 +231,10 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
 
         {tab === "relations" && (
           <div className="space-y-3">
+            <RelationGraph
+              npcs={npcs.map((m) => ({ name: m.npcName, trust: m.trust }))}
+              pcName={currentPC.name}
+            />
             {npcs.length ? (
               npcs.map((m) => (
                 <div
@@ -367,6 +375,67 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
               )}
             </div>
 
+            {/* 支线任务板 */}
+            <div>
+              <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">支线任务</div>
+              {(systemState?.quests ?? []).length > 0 ? (
+                <ul className="mb-2 space-y-1">
+                  {(systemState?.quests ?? []).map((q, i) => (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2 rounded bg-gray-50 px-2 py-1 dark:bg-gray-800"
+                    >
+                      <button onClick={() => toggleQuest(i)} className="shrink-0">
+                        {q.done ? "✅" : "⬜"}
+                      </button>
+                      <span
+                        className={`flex-1 text-sm ${
+                          q.done
+                            ? "text-gray-400 line-through dark:text-gray-500"
+                            : "text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {q.text}
+                      </span>
+                      <button
+                        onClick={() => removeQuest(i)}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">
+                  还没有。给自己定个小目标，比如「结交萧炎」。
+                </p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={questText}
+                  onChange={(e) => setQuestText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      addQuest(questText);
+                      setQuestText("");
+                    }
+                  }}
+                  placeholder="添加一个支线任务"
+                  className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                />
+                <button
+                  onClick={() => {
+                    addQuest(questText);
+                    setQuestText("");
+                  }}
+                  className="shrink-0 rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+                >
+                  添加
+                </button>
+              </div>
+            </div>
+
             {/* 商城（按难度分层） */}
             <div>
               <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">商城</div>
@@ -435,6 +504,45 @@ export default function CharacterPanel({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+  );
+}
+
+// 关系图谱：PC 居中，NPC 围成一圈，连线颜色按信任度（绿/黄/红）
+function RelationGraph({ npcs, pcName }: { npcs: { name: string; trust: number }[]; pcName: string }) {
+  const cx = 140;
+  const cy = 108;
+  const r = 76;
+  const n = npcs.length;
+  if (n === 0) {
+    return <p className="text-xs text-gray-400 dark:text-gray-500">暂无关系，去做几次结交/试探行动。</p>;
+  }
+  const color = (t: number) => (t >= 0.5 ? "#22c55e" : t >= 0.2 ? "#f59e0b" : "#ef4444");
+  const pos = (i: number) => {
+    const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  };
+  return (
+    <svg viewBox="0 0 280 216" className="w-full">
+      {npcs.map((npc, i) => {
+        const p = pos(i);
+        return <line key={i} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={color(npc.trust)} strokeWidth={2} />;
+      })}
+      <circle cx={cx} cy={cy} r={16} fill="#3b82f6" />
+      <text x={cx} y={cy + 4} textAnchor="middle" fill="#fff" fontSize="11">
+        {pcName.slice(0, 3)}
+      </text>
+      {npcs.map((npc, i) => {
+        const p = pos(i);
+        return (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r={10} fill={color(npc.trust)} />
+            <text x={p.x} y={p.y + 22} textAnchor="middle" fill="currentColor" fontSize="9">
+              {npc.name.slice(0, 4)}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 

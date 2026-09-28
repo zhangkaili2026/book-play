@@ -152,6 +152,7 @@ async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
       readChapters: [],
       regrets: [],
       readingSeconds: 0,
+      quests: [],
     });
     sys = (await db.systemStates.get(id))!;
   }
@@ -337,6 +338,9 @@ interface AppState {
   addHighlight: (text: string) => Promise<void>;
   removeHighlight: (id: number) => Promise<void>;
   toggleBookmark: () => Promise<void>;
+  addQuest: (text: string) => Promise<void>;
+  toggleQuest: (index: number) => Promise<void>;
+  removeQuest: (index: number) => Promise<void>;
   refreshSavePoints: () => Promise<void>;
   createSavePoint: (name: string) => Promise<void>;
   autoSavePoint: () => Promise<void>;
@@ -972,6 +976,35 @@ export const useStore = create<AppState>((set, get) => ({
     }
     const updated = await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
     set({ bookmarks: updated });
+  },
+
+  async addQuest(text: string) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const t = text.trim();
+    if (!t) return;
+    const quests = [...(systemState.quests ?? []), { text: t, done: false }];
+    await db.systemStates.update(systemState.id!, { quests });
+    set({ systemState: { ...systemState, quests } });
+  },
+
+  async toggleQuest(index: number) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const quests = (systemState.quests ?? []).map((q, i) =>
+      i === index ? { ...q, done: !q.done } : q
+    );
+    await db.systemStates.update(systemState.id!, { quests });
+    set({ systemState: { ...systemState, quests } });
+  },
+
+  async removeQuest(index: number) {
+    const { currentSaveId, systemState } = get();
+    if (currentSaveId == null || !systemState) return;
+    const quests = [...(systemState.quests ?? [])];
+    quests.splice(index, 1);
+    await db.systemStates.update(systemState.id!, { quests });
+    set({ systemState: { ...systemState, quests } });
   },
 
   async refreshSavePoints() {

@@ -117,6 +117,7 @@ export interface SaveBackup {
     readChapters: number[];
     regrets: string[];
     readingSeconds: number;
+    quests: { text: string; done: boolean }[];
   };
   savePoints?: SavePoint[];
 }
@@ -148,6 +149,7 @@ export function buildSaveBackup(ctx: {
       readChapters: ctx.systemState.readChapters,
       regrets: ctx.systemState.regrets,
       readingSeconds: ctx.systemState.readingSeconds,
+      quests: ctx.systemState.quests,
     },
     savePoints: ctx.savePoints,
   };
@@ -237,6 +239,7 @@ export async function importSaveBackup(json: string): Promise<string> {
       readChapters: data.systemState.readChapters ?? [],
       regrets: data.systemState.regrets ?? [],
       readingSeconds: data.systemState.readingSeconds ?? 0,
+      quests: data.systemState.quests ?? [],
     });
   }
 

@@ -222,6 +222,30 @@ export function getReadingGoalMinutes(): number {
   return 30;
 }
 
+// —— 结局图鉴（收集达到过的结局，跨存档/跨书）——
+const ENDINGS_KEY = "bookplay.endings";
+
+export function recordEnding(label: string): void {
+  try {
+    const raw = localStorage.getItem(ENDINGS_KEY);
+    const list: string[] = raw ? JSON.parse(raw) : [];
+    if (!list.includes(label)) list.push(label);
+    localStorage.setItem(ENDINGS_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getReachedEndings(): string[] {
+  try {
+    const raw = localStorage.getItem(ENDINGS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
 export function setReadingGoalMinutes(n: number): void {
   try {
     localStorage.setItem(GOAL_KEY, String(Math.max(0, n)));

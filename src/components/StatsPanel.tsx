@@ -6,7 +6,8 @@ import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
 import { generateShareCard } from "@/lib/shareCard";
-import { getTodayReadingSeconds, getReadingGoalMinutes, getReadingStreak, getLastNDays } from "@/lib/settings";
+import { getTodayReadingSeconds, getReadingGoalMinutes, getReadingStreak, getLastNDays, recordEnding, getReachedEndings } from "@/lib/settings";
+import { ACHIEVEMENTS, checkAchievements } from "@/lib/achievements";
 
 function formatSeconds(s: number): string {
   if (s < 60) return `${s}秒`;
@@ -100,6 +101,21 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
         setAllActions(arr);
       });
   }, [currentSaveId]);
+
+  // 记录当前结局到图鉴
+  useEffect(() => {
+    recordEnding(getEnding(offset).label);
+  }, [offset]);
+
+  const unlocked = checkAchievements({
+    offset,
+    complexCount: allActions.filter((a) => a.kind === "complex").length,
+    readCount: systemState?.readChapters?.length ?? 0,
+    npcCount: npcMemories.length,
+    redeemedCount: (systemState?.redeemed ?? []).length,
+  });
+  const reachedEndings = getReachedEndings();
+  const allEndings = ["原著结局", "改变结局", "颠覆结局", "世界反噬"];
 
   // 重构偏移度趋势（按行动累计）
   const trend: number[] = [];
@@ -291,6 +307,53 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           <pre className="mt-2 whitespace-pre-wrap rounded bg-gray-50 p-3 text-xs leading-relaxed text-gray-600 dark:bg-gray-800 dark:text-gray-300">
             {reportMd}
           </pre>
+        </div>
+
+        {/* 结局图鉴 + 成就 */}
+        <div className="mt-4 space-y-4">
+          <div>
+            <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              结局图鉴（{reachedEndings.length}/{allEndings.length}）
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {allEndings.map((e) => (
+                <div
+                  key={e}
+                  className={`rounded border p-2 text-center text-xs ${
+                    reachedEndings.includes(e)
+                      ? "border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-900/20 dark:text-green-300"
+                      : "border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-500"
+                  }`}
+                >
+                  {reachedEndings.includes(e) ? "✅" : "🔒"} {e}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+              成就（{unlocked.size}/{ACHIEVEMENTS.length}）
+            </div>
+            <div className="space-y-1">
+              {ACHIEVEMENTS.map((a) => {
+                const got = unlocked.has(a.id);
+                return (
+                  <div
+                    key={a.id}
+                    className={`flex items-center justify-between rounded px-2 py-1 text-xs ${
+                      got
+                        ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300"
+                        : "text-gray-400 dark:text-gray-500"
+                    }`}
+                  >
+                    <span>{got ? "✅" : "🔒"} {a.name}</span>
+                    <span className="text-gray-400 dark:text-gray-500">{a.desc}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>

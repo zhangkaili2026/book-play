@@ -299,7 +299,7 @@ export default function CharacterPanel({
               <li>0.8 以上：剧情事件拉回</li>
             </ul>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              简单行动 +0，中等行动 +0.05，复杂行动 +0.2。
+              简单行动 +0，中等行动 +0.02，复杂行动 +0.1。
             </p>
           </div>
         )}
@@ -328,6 +328,9 @@ export default function CharacterPanel({
                   />
                 </div>
               </div>
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                点数获取：升级 +10，复杂行动 +2。
+              </p>
             </div>
 
             {/* 意难平清单 */}

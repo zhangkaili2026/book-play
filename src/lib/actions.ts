@@ -22,12 +22,12 @@ export function classifyAction(text: string): ActionKind {
   return "simple";
 }
 
-// —— 偏移度增量（对应文档模块五的加权）——
+// —— 偏移度增量（普通行动几乎不偏离，让玩家能放开玩）——
 export function offsetDeltaFor(kind: ActionKind): number {
   switch (kind) {
     case "simple":  return 0;      // 闲聊/观察/移动：+0
-    case "medium":  return 0.05;   // 影响支线角色：+0.05
-    case "complex": return 0.2;    // 影响主角团核心决策：+0.2
+    case "medium":  return 0.02;   // 影响支线角色：+0.02
+    case "complex": return 0.1;    // 影响核心决策：+0.1
   }
 }
 

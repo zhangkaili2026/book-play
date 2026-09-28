@@ -10,6 +10,7 @@ import SavePanel from "@/components/SavePanel";
 import SearchPanel from "@/components/SearchPanel";
 import StatsPanel from "@/components/StatsPanel";
 import TTSBar from "@/components/TTSBar";
+import MenuPanel, { type MenuItem } from "@/components/MenuPanel";
 import { getScrollPos, setScrollPos } from "@/lib/scroll";
 import { db, type ActionRecord } from "@/lib/db";
 import { FAMOUS_SCENE_KEYWORDS } from "@/lib/system";
@@ -70,6 +71,7 @@ export default function Reader() {
     "toc" | "character" | "impact" | "save" | "search" | "stats" | null
   >(null);
   const [characterTab, setCharacterTab] = useState<Tab>("profile");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [aaOpen, setAaOpen] = useState(false);
   const [focusActionId, setFocusActionId] = useState<number | null>(null);
   const [immersive, setImmersive] = useState(false);
@@ -231,6 +233,17 @@ export default function Reader() {
 
   const btnCls =
     "rounded border border-gray-300 px-2 py-1 dark:border-gray-600";
+
+  const menuItems: MenuItem[] = [
+    { icon: "📑", label: "目录", desc: "章节列表", onClick: () => { setMenuOpen(false); setSidePanel("toc"); } },
+    { icon: "📈", label: "影响", desc: "行动 / 偏移度 / 划线", onClick: () => { setMenuOpen(false); setSidePanel("impact"); } },
+    { icon: "💾", label: "存档", desc: "存档点 / 读档回退", onClick: () => { setMenuOpen(false); setSidePanel("save"); } },
+    { icon: "🔍", label: "搜索", desc: "全文搜索", onClick: () => { setMenuOpen(false); setSidePanel("search"); } },
+    { icon: "📊", label: "统计", desc: "报告 / 结局 / 成就 / 分享卡", onClick: () => { setMenuOpen(false); setSidePanel("stats"); } },
+    { icon: "📋", label: "角色档案", desc: "档案 / 能力 / 势力 / 履历 / 关系", onClick: () => { setMenuOpen(false); setCharacterTab("profile"); setSidePanel("character"); } },
+    { icon: "🎮", label: "系统商城", desc: "商城 / 支线任务 / 意难平", onClick: () => { setMenuOpen(false); setCharacterTab("system"); setSidePanel("character"); } },
+    { icon: "🕶", label: "沉浸阅读", desc: "只留正文", onClick: () => { setMenuOpen(false); setImmersive(true); } },
+  ];
 
   // 正文区（沉浸模式全屏，普通模式 flex-1）
   const readingArea = (
@@ -412,6 +425,13 @@ export default function Reader() {
 
         {/* 章节导航 + 阅读设置 */}
         <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-4 py-2 dark:border-gray-700 dark:bg-gray-900">
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="rounded border border-blue-500 bg-blue-50 px-2 py-1 font-medium text-blue-600 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300"
+            title="功能菜单"
+          >
+            🧭 菜单
+          </button>
           <button
             onClick={() => setSidePanel(sidePanel === "toc" ? null : "toc")}
             className={btnCls + " text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"}
@@ -602,6 +622,9 @@ export default function Reader() {
           onClose={() => setSidePanel(null)}
         />
       )}
+
+      {/* 功能菜单 */}
+      {menuOpen && <MenuPanel onClose={() => setMenuOpen(false)} items={menuItems} />}
     </div>
   );
 }

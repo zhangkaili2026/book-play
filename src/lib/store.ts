@@ -164,17 +164,21 @@ async function grantXp(
   saveId: number,
   amount: number,
   reason: string,
-  markChapterRead?: number
+  markChapterRead?: number,
+  bonusPoints = 0
 ): Promise<SystemState> {
   const sys = await getOrCreateSystemState(saveId);
   const xp = sys.xp + amount;
   const level = Math.floor(xp / XP_PER_LEVEL) + 1;
   const levelUps = level - sys.level;
-  const points = sys.points + levelUps * POINTS_PER_LEVEL;
+  const points = sys.points + levelUps * POINTS_PER_LEVEL + bonusPoints;
 
   const messages = [...sys.messages, `+${amount} 经验（${reason}）`];
   if (levelUps > 0) {
     messages.push(`🎉 升级到 ${level} 级，获得 ${levelUps * POINTS_PER_LEVEL} 点数`);
+  }
+  if (bonusPoints > 0) {
+    messages.push(`+${bonusPoints} 点数（关键事件）`);
   }
 
   const readChapters =
@@ -804,7 +808,7 @@ export const useStore = create<AppState>((set, get) => ({
     const xpAmount =
       kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
     const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
-    const systemState = await grantXp(currentSaveId, xpAmount, reason);
+    const systemState = await grantXp(currentSaveId, xpAmount, reason, undefined, kind === "complex" ? 2 : 0);
 
     const u = getUsage();
     set({

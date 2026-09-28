@@ -38,8 +38,8 @@ check("复杂（建势力）", classifyAction("建立自己的势力"), "complex
 
 console.log("偏移度：");
 check("简单 +0", offsetDeltaFor("simple"), 0);
-check("中等 +0.05", offsetDeltaFor("medium"), 0.05);
-check("复杂 +0.2", offsetDeltaFor("complex"), 0.2);
+check("中等 +0.02", offsetDeltaFor("medium"), 0.02);
+check("复杂 +0.1", offsetDeltaFor("complex"), 0.1);
 check("<0.3 自由支线", offsetTier(0.1), "自由支线");
 check("≥0.8 事件拉回", offsetTier(0.9), "剧情事件拉回");
 

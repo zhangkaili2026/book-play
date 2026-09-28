@@ -71,6 +71,14 @@ export function buildActionPrompt(ctx: {
   recentActions: string[];
   action: string;
 }) {
+  const STYLE_PROMPTS: Record<string, string> = {
+    "原著风": "语气要模仿原著文风，庄重、贴合世界观。",
+    "轻松风": "语气轻松幽默，可以适当玩梗。",
+    "严肃风": "语气严肃克制，客观陈述事实。",
+    "吐槽风": "语气带点毒舌和吐槽，一针见血。",
+  };
+  const style = loadSettings().aiStyle;
+
   const system = [
     "你是一个互动小说的「世界回应器」。玩家在书里扮演一个角色，会向你提交行动。",
     "你只负责判断：这个行动是否可行、会带来什么后果、影响到哪些角色/势力/主线节点。",
@@ -79,6 +87,7 @@ export function buildActionPrompt(ctx: {
     "2. 用第二人称对玩家说话，200~500 字。",
     "3. 如果行动超出角色能力或势力，诚实指出，并给出迂回建议。",
     "4. 绝不跳出这本书的世界观。",
+    `5. ${STYLE_PROMPTS[style] ?? STYLE_PROMPTS["原著风"]}`,
   ].join("\n");
 
   const user = [

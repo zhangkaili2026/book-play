@@ -8,6 +8,7 @@ import {
   applyProviderPreset,
   getReadingGoalMinutes,
   setReadingGoalMinutes,
+  AI_STYLES,
   type AISettings,
   type AIProvider,
 } from "@/lib/settings";
@@ -87,6 +88,24 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="mb-4 rounded bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
           {statusLine}
+        </div>
+
+        <div className="mb-2 text-xs text-gray-500 dark:text-gray-400">反馈风格</div>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {AI_STYLES.map((st) => (
+            <button
+              key={st.id}
+              onClick={() => update("aiStyle", st.id)}
+              title={st.desc}
+              className={`rounded border px-2 py-1.5 text-sm ${
+                s.aiStyle === st.id
+                  ? "border-blue-500 bg-blue-50 font-medium text-blue-600 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              }`}
+            >
+              {st.id}
+            </button>
+          ))}
         </div>
 
         <div className="space-y-3 text-sm">

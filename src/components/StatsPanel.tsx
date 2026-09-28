@@ -6,12 +6,24 @@ import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
 import { generateShareCard } from "@/lib/shareCard";
-import { getTodayReadingSeconds, getReadingGoalMinutes } from "@/lib/settings";
+import { getTodayReadingSeconds, getReadingGoalMinutes, getReadingStreak, getLastNDays } from "@/lib/settings";
 
 function formatSeconds(s: number): string {
   if (s < 60) return `${s}秒`;
   if (s < 3600) return `${Math.floor(s / 60)}分钟`;
   return `${Math.floor(s / 3600)}小时${Math.floor((s % 3600) / 60)}分`;
+}
+
+function buildStoryMarkdown(actions: ActionRecord[], pcName: string): string {
+  const sorted = [...actions].sort((a, b) => a.createdAt - b.createdAt);
+  const lines = [`# 我在这本书里的故事 · ${pcName}`, ""];
+  for (const a of sorted) {
+    lines.push(`### 第${a.chapterIndex + 1}章 · ${a.content}`);
+    lines.push("");
+    lines.push(a.result);
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 // 偏移度趋势曲线（单色折线 + 分级参考线，纯 SVG 无依赖）
@@ -106,6 +118,9 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
   const goalSeconds = goalMinutes * 60;
   const goalPercent = goalSeconds > 0 ? Math.min(100, (todaySeconds / goalSeconds) * 100) : 0;
   const goalMet = goalSeconds > 0 && todaySeconds >= goalSeconds;
+  const streak = getReadingStreak();
+  const last7 = getLastNDays(7);
+  const maxDaySeconds = Math.max(...last7.map((d) => d.seconds), 1);
   const reportMd = [
     "# 我的书游报告",
     "",
@@ -160,7 +175,10 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
         {/* 今日阅读目标 */}
         <div className="mt-4 rounded border border-gray-200 p-3 dark:border-gray-700">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="font-medium text-gray-700 dark:text-gray-300">今日阅读</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              今日阅读
+              {streak > 0 && <span className="ml-1 text-xs text-orange-500">🔥 连续 {streak} 天</span>}
+            </span>
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {formatSeconds(todaySeconds)} / 目标 {goalMinutes} 分钟{goalMet ? " ✅ 已达标" : ""}
             </span>
@@ -170,6 +188,24 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
               className="h-2 rounded bg-green-500"
               style={{ width: `${goalPercent}%` }}
             />
+          </div>
+        </div>
+
+        {/* 本周阅读柱状图 */}
+        <div className="mt-3 rounded border border-gray-200 p-3 dark:border-gray-700">
+          <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">本周阅读（分钟）</div>
+          <div className="flex h-12 items-end gap-1">
+            {last7.map((d, i) => {
+              const h = (d.seconds / maxDaySeconds) * 48;
+              return (
+                <div
+                  key={i}
+                  className="flex-1 rounded-sm bg-blue-400 dark:bg-blue-500"
+                  style={{ height: `${Math.max(2, h)}px` }}
+                  title={`${d.date.slice(5)}: ${Math.round(d.seconds / 60)} 分钟`}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -187,6 +223,31 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
           <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
             虚线为分级线（0.3 / 0.6 / 0.8）。越往上世界越排斥你。
           </p>
+        </div>
+
+        {/* 时间线 + 回放 */}
+        <div className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">时间线</span>
+            <button
+              onClick={() => download("我的故事.md", buildStoryMarkdown(allActions, pcName))}
+              className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+            >
+              回放导出
+            </button>
+          </div>
+          {allActions.length ? (
+            <div className="space-y-1">
+              {allActions.map((a) => (
+                <div key={a.id} className="border-l-2 border-gray-200 pl-2 dark:border-gray-700">
+                  <div className="text-xs text-gray-400 dark:text-gray-500">第{a.chapterIndex + 1}章</div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">{a.content}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 dark:text-gray-500">还没有行动。</p>
+          )}
         </div>
 
         {/* 结局 + 玩后报告 */}

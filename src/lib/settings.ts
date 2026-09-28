@@ -11,9 +11,18 @@ export interface AISettings {
   inputPricePerM: number;   // 每百万输入 token 价格（元）
   outputPricePerM: number;  // 每百万输出 token 价格（元）
   provider: AIProvider;     // 当前选择的 AI 来源
+  aiStyle: string;          // AI 反馈风格
 }
 
 export type AIProvider = "ollama" | "deepseek" | "custom" | "off";
+
+// AI 反馈风格（影响复杂行动的回应语气）
+export const AI_STYLES: { id: string; desc: string }[] = [
+  { id: "原著风", desc: "模仿原著文风，庄重贴合世界观" },
+  { id: "轻松风", desc: "轻松幽默，可适当玩梗" },
+  { id: "严肃风", desc: "严肃克制，客观陈述" },
+  { id: "吐槽风", desc: "毒舌吐槽，一针见血" },
+];
 
 const SETTINGS_KEY = "bookplay.ai.settings";
 const USAGE_KEY = "bookplay.ai.usage";
@@ -26,6 +35,7 @@ export const DEFAULT_SETTINGS: AISettings = {
   inputPricePerM: 1,
   outputPricePerM: 2,
   provider: "custom",
+  aiStyle: "原著风",
 };
 
 // 切换 AI 来源时自动填充的预设
@@ -127,17 +137,39 @@ export function clearUsage(): void {
 const DAILY_KEY = "bookplay.dailyReading";
 const GOAL_KEY = "bookplay.readingGoal";
 
-export function addDailyReadingSeconds(n: number): void {
-  const today = new Date().toISOString().slice(0, 10);
-  let data = { date: today, seconds: 0 };
+function dateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+interface DailyData {
+  days: Record<string, number>;
+}
+
+function loadDaily(): DailyData {
   try {
     const raw = localStorage.getItem(DAILY_KEY);
-    if (raw) data = JSON.parse(raw);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && d.days) return d;
+    }
   } catch {
     /* ignore */
   }
-  if (data.date !== today) data = { date: today, seconds: 0 };
-  data.seconds += n;
+  return { days: {} };
+}
+
+export function addDailyReadingSeconds(n: number): void {
+  const data = loadDaily();
+  const today = dateKey(new Date());
+  data.days[today] = (data.days[today] ?? 0) + n;
+  // 只保留最近 60 天
+  const keys = Object.keys(data.days).sort();
+  while (keys.length > 60) {
+    delete data.days[keys.shift()!];
+  }
   try {
     localStorage.setItem(DAILY_KEY, JSON.stringify(data));
   } catch {
@@ -146,17 +178,38 @@ export function addDailyReadingSeconds(n: number): void {
 }
 
 export function getTodayReadingSeconds(): number {
-  const today = new Date().toISOString().slice(0, 10);
-  try {
-    const raw = localStorage.getItem(DAILY_KEY);
-    if (raw) {
-      const data = JSON.parse(raw);
-      if (data.date === today) return data.seconds;
+  const data = loadDaily();
+  return data.days[dateKey(new Date())] ?? 0;
+}
+
+// 连续阅读天数（今天起往前数，读到就算）
+export function getReadingStreak(): number {
+  const data = loadDaily();
+  let streak = 0;
+  const d = new Date();
+  while (true) {
+    if ((data.days[dateKey(d)] ?? 0) > 0) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
     }
-  } catch {
-    /* ignore */
   }
-  return 0;
+  return streak;
+}
+
+// 最近 N 天的阅读秒数（用于画柱状图）
+export function getLastNDays(n: number): { date: string; seconds: number }[] {
+  const data = loadDaily();
+  const result: { date: string; seconds: number }[] = [];
+  const today = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = dateKey(d);
+    result.push({ date: key, seconds: data.days[key] ?? 0 });
+  }
+  return result;
 }
 
 export function getReadingGoalMinutes(): number {

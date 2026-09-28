@@ -1,0 +1,17 @@
+{
+  "name": "书游引擎 BookPlay",
+  "short_name": "书游引擎",
+  "description": "阅读为主、影响为辅的互动小说网页应用，数据只存本地。",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4F46E5",
+  "theme_color": "#4F46E5",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

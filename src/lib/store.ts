@@ -296,7 +296,8 @@ interface AppState {
 
   // —— 影响层 ——
   offset: number;
-  recentActions: ActionRecord[];
+  recentActions: ActionRecord[]; // 最近 20 条（AI 上下文 / 快捷展示）
+  allActions: ActionRecord[];    // 当前存档全部行动（影响面板/履历/旁注展示，不能截断）
   npcMemories: NpcMemory[];
   selection: { paraIndex: number; text: string } | null; // 阅读区选中的段落
   systemState: SystemState | null; // 当前存档的系统面板状态
@@ -381,6 +382,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   offset: 0,
   recentActions: [],
+  allActions: [],
   npcMemories: [],
   selection: null,
   systemState: null,
@@ -539,6 +541,7 @@ export const useStore = create<AppState>((set, get) => ({
       currentChapterIndex: 0,
       offset: 0,
       recentActions: [],
+      allActions: [],
       npcMemories: [],
       systemState: null,
       templates: book?.templates ?? null,
@@ -612,6 +615,7 @@ export const useStore = create<AppState>((set, get) => ({
       currentChapterIndex: save.lastChapterIndex, // 让 gotoChapter 不触发自动存档
       offset: save.offset,
       recentActions: recent.slice(0, 20),
+      allActions: recent,
       npcMemories,
       systemState,
       savePoints,
@@ -679,6 +683,7 @@ export const useStore = create<AppState>((set, get) => ({
           showCreator: true,
           offset: 0,
           recentActions: [],
+          allActions: [],
           npcMemories: [],
           systemState: null,
           savePoints: [],
@@ -831,6 +836,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       offset: newOffset,
       recentActions: recent.slice(0, 20),
+      allActions: recent,
       npcMemories,
       systemState,
       todayCost: u.todayCost,
@@ -941,6 +947,7 @@ export const useStore = create<AppState>((set, get) => ({
       showCreator: false,
       offset: 0,
       recentActions: [],
+      allActions: [],
       npcMemories: [],
       todayCost: 0,
       totalCost: 0,

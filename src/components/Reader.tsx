@@ -52,7 +52,7 @@ export default function Reader() {
   const currentSaveId = useStore((s) => s.currentSaveId);
   const currentBookId = useStore((s) => s.currentBookId);
   const pureReadMode = useStore((s) => s.pureReadMode);
-  const recentActions = useStore((s) => s.recentActions);
+  const allActions = useStore((s) => s.allActions);
   const systemState = useStore((s) => s.systemState);
   const highlights = useStore((s) => s.highlights);
   const bookmarks = useStore((s) => s.bookmarks);
@@ -121,7 +121,7 @@ export default function Reader() {
   const bgStyle = BG_STYLES[readingBg];
 
   // 本章已锚定的行动 → 按段落分组
-  const chapterActions = recentActions.filter(
+  const chapterActions = allActions.filter(
     (a) => a.chapterIndex === currentChapterIndex && a.paraIndex != null
   );
   const notesByPara = new Map<number, typeof chapterActions>();

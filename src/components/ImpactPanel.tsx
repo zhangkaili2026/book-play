@@ -15,7 +15,7 @@ export default function ImpactPanel({
   focusId?: number | null;
 }) {
   const offset = useStore((s) => s.offset);
-  const recentActions = useStore((s) => s.recentActions);
+  const allActions = useStore((s) => s.allActions);
   const highlights = useStore((s) => s.highlights);
   const removeHighlight = useStore((s) => s.removeHighlight);
 
@@ -79,9 +79,9 @@ export default function ImpactPanel({
 
       {/* 行动影响记录 */}
       <div className="flex-1 overflow-y-auto p-3">
-        {recentActions.length ? (
+        {allActions.length ? (
           <div className="space-y-2">
-            {recentActions.map((a) => (
+            {allActions.map((a) => (
               <div
                 key={a.id}
                 className={`rounded border p-2 text-sm ${

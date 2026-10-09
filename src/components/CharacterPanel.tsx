@@ -29,7 +29,7 @@ export default function CharacterPanel({
 }) {
   const currentPC = useStore((s) => s.currentPC);
   const npcMemories = useStore((s) => s.npcMemories);
-  const recentActions = useStore((s) => s.recentActions);
+  const allActions = useStore((s) => s.allActions);
   const offset = useStore((s) => s.offset);
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
@@ -52,7 +52,7 @@ export default function CharacterPanel({
   if (!currentPC) return null;
 
   const chapterTitle = chapterList[currentChapterIndex]?.title ?? "—";
-  const bigEvents = recentActions.filter((a) => a.kind === "complex");
+  const bigEvents = allActions.filter((a) => a.kind === "complex");
   const npcs = [...npcMemories].sort((a, b) => b.trust - a.trust);
   const points = systemState?.points ?? 0;
   const redeemedNames = new Set((systemState?.redeemed ?? []).map((r) => r.name));
@@ -217,9 +217,9 @@ export default function CharacterPanel({
 
             <div>
               <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">流水账</div>
-              {recentActions.length ? (
+              {allActions.length ? (
                 <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-                  {recentActions.map((a) => (
+                  {allActions.map((a) => (
                     <li key={a.id} className="flex justify-between gap-2">
                       <span className="truncate">{a.content}</span>
                       <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">

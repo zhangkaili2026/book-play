@@ -6,6 +6,9 @@
 import { db } from "./db";
 import type { AIResult } from "./ai";
 
+// AI 缓存上限：避免 IndexedDB 无限增长（不依赖 schema，无需迁移）
+const MAX_CACHE_ENTRIES = 500;
+
 export function buildCacheKey(input: {
   model: string;
   saveId: number;
@@ -32,6 +35,8 @@ export async function getCached(key: string): Promise<AIResult | null> {
 }
 
 export async function setCached(key: string, result: AIResult): Promise<void> {
+  // 覆盖同键旧条目，避免重复累积
+  await db.aiCache.where("key").equals(key).delete();
   await db.aiCache.add({
     key,
     result: result.content,
@@ -40,6 +45,15 @@ export async function setCached(key: string, result: AIResult): Promise<void> {
     cost: result.cost,
     createdAt: Date.now(),
   });
+  // 超上限时按主键（插入顺序）淘汰最旧条目，避免无限增长
+  const count = await db.aiCache.count();
+  if (count > MAX_CACHE_ENTRIES) {
+    const oldest = await db.aiCache
+      .orderBy(":id")
+      .limit(count - MAX_CACHE_ENTRIES)
+      .primaryKeys();
+    if (oldest.length) await db.aiCache.bulkDelete(oldest);
+  }
 }
 
 export async function getCacheCount(): Promise<number> {

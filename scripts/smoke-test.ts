@@ -31,6 +31,9 @@ const noCh = parseChapters("只有正文，没有章节标题。");
 check("无标题 → 归入前言", noCh.length, 1);
 check("前言标题", noCh[0].title, "前言");
 
+const prefaceSentence = parseChapters("前言不搭后语，这不是章节。\n\n第一章 开始\n\n正文。");
+check("前言开头的句子不算新章节", prefaceSentence.length, 2);
+
 console.log("行动分级：");
 check("简单（闲聊）", classifyAction("和萧炎闲聊"), "simple");
 check("中等（结交）", classifyAction("结交纳兰嫣然"), "medium");

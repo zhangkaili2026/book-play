@@ -234,6 +234,8 @@ async function cleanupOrphanData(): Promise<{ removed: number }> {
     db.actions,
     db.systemStates,
     db.savePoints,
+    db.highlights,
+    db.bookmarks,
   ] as const;
   for (const table of childTables) {
     const rows = await table.toArray();

@@ -9,9 +9,11 @@ export interface ParsedChapter {
 }
 
 // 中文章节形态：第X章/第X回/第X卷/第X节/第X集/第X部/第X篇
-// + 英文 Chapter X + 序章/楔子/尾声等特殊章
+// + 英文 Chapter X + 序章/楔子/尾声等特殊章。
+// 注意：序章/前言/楔子/尾声等特殊词单独成词，要求后面跟空白/行尾/冒号，
+// 避免「前言不搭后语」这类正文句子被误判成章节标题。
 const CHAPTER_TITLE_RE =
-  /^\s*(第[零一二三四五六七八九十百千万0-9]+[章节回卷集部篇]|Chapter\s+\d+|序章|序言|楔子|前言|引子|尾声|后记|番外).*/i;
+  /^\s*(第[零一二三四五六七八九十百千万0-9]+[章节回卷集部篇]|Chapter\s+\d+|(?:序章|序言|楔子|前言|引子|尾声|后记|番外)(?=\s|$|[：:]))/i;
 
 export function isChapterTitle(line: string): boolean {
   return CHAPTER_TITLE_RE.test(line.trim());

@@ -23,19 +23,33 @@ export async function callLLM(
     throw new Error("未配置 API Key");
   }
 
-  const res = await fetch(`${s.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: s.model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    }),
-  });
+  // 30 秒超时：网络半开 / AI 服务假死时不能卡死界面
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  let res: Response;
+  try {
+    res = await fetch(`${s.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: s.model,
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.7,
+      }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (controller.signal.aborted) {
+      throw new Error("AI 请求超时（30 秒无响应），请检查网络或 AI 服务是否正常");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!res.ok) {
     const text = await res.text();

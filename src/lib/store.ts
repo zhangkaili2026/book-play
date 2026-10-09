@@ -271,6 +271,9 @@ async function snapshotCurrentState(saveId: number) {
     redeemed: sys.redeemed,
     messages: sys.messages,
     readChapters: sys.readChapters,
+    regrets: sys.regrets ?? [],
+    readingSeconds: sys.readingSeconds ?? 0,
+    quests: sys.quests ?? [],
     npcMemories,
     actions,
   };
@@ -448,8 +451,9 @@ export const useStore = create<AppState>((set, get) => ({
         try {
           templates = await generateBookTemplates(title, parsed[0]?.content ?? "");
           await db.books.update(bookId, { templates });
-        } catch {
+        } catch (e) {
           templates = null;
+          console.warn("开局身份生成失败，已退回通用模板", e);
         }
       }
       set({ templates, templatesLoading: false });
@@ -496,8 +500,9 @@ export const useStore = create<AppState>((set, get) => ({
         try {
           templates = await generateBookTemplates(title, parsed[0]?.content ?? "");
           await db.books.update(bookId, { templates });
-        } catch {
+        } catch (e) {
           templates = null;
+          console.warn("开局身份生成失败，已退回通用模板", e);
         }
       }
       set({ templates, templatesLoading: false });
@@ -720,6 +725,7 @@ export const useStore = create<AppState>((set, get) => ({
     let aiCompletion: number | undefined;
     let aiCost: number | undefined;
     let aiCached: boolean | undefined;
+    let effective = true; // 行动是否真正生效（复杂行动只有 AI 真正判定才算）
 
     if (kind === "complex" && currentPC) {
       const usage = getUsage();
@@ -730,11 +736,20 @@ export const useStore = create<AppState>((set, get) => ({
           settings.provider === "off"
             ? "AI 已关闭。点右上角 ⚙️，切换到「本地 Ollama」或「DeepSeek」即可重新启用。"
             : "这是复杂行动，需要 AI 判断。你还没配置 API Key —— 点右上角 ⚙️ 配置，或用本地 Ollama（免费）。";
+        effective = false; // AI 没判定，这次行动不算真正生效
       } else if (usage.todayCost >= settings.dailyBudget) {
         result = "今日 AI 预算已用完，自动切回占位结果（本地，0 token）。";
+        effective = false;
       } else {
         // 先查缓存：相同角色 + 相同章节 + 相同行动 → 直接复用，0 token
-        const cacheKey = buildCacheKey(settings.model, currentPC.name, currentChapterIndex, text);
+        const cacheKey = buildCacheKey({
+          model: settings.model,
+          saveId: currentSaveId,
+          pcName: currentPC.name,
+          chapterIndex: currentChapterIndex,
+          recentActions: recentActions.slice(0, 5).map((a) => a.content),
+          action: text,
+        });
         const cached = await getCached(cacheKey);
 
         if (cached) {
@@ -767,6 +782,7 @@ export const useStore = create<AppState>((set, get) => ({
             aiCached = false;
           } catch (e) {
             result = `AI 调用失败：${(e as Error).message}`;
+            effective = false; // 调用失败，不算生效
           }
         }
       }
@@ -787,28 +803,29 @@ export const useStore = create<AppState>((set, get) => ({
         : {}),
     });
 
-    // 更新偏移度（封顶 1）
-    const save = await db.saves.get(currentSaveId);
-    const newOffset = Math.min(1, (save?.offset ?? 0) + offsetDeltaFor(kind));
-    await db.saves.update(currentSaveId, { offset: newOffset });
+    // 只有"真正生效"的行动才推进偏移度 / NPC 关系 / 经验（AI 未判定/失败不算）
+    let newOffset = (await db.saves.get(currentSaveId))?.offset ?? 0;
+    let systemState = get().systemState;
+    if (effective) {
+      newOffset = Math.min(1, newOffset + offsetDeltaFor(kind));
+      await db.saves.update(currentSaveId, { offset: newOffset });
 
-    // 中等/复杂行动 → 尝试更新 NPC 记忆
-    if (kind !== "simple") {
-      const target = extractTargetName(text);
-      if (target && target !== currentPC?.name) {
-        await upsertNpcMemory(currentSaveId, target, kind);
+      if (kind !== "simple") {
+        const target = extractTargetName(text);
+        if (target && target !== currentPC?.name) {
+          await upsertNpcMemory(currentSaveId, target, kind);
+        }
       }
+
+      const xpAmount =
+        kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
+      const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
+      systemState = await grantXp(currentSaveId, xpAmount, reason, undefined, kind === "complex" ? 2 : 0);
     }
 
     const recent = await db.actions.where("saveId").equals(currentSaveId).toArray();
     recent.sort((a, b) => b.createdAt - a.createdAt);
     const npcMemories = await db.npcMemories.where("saveId").equals(currentSaveId).toArray();
-
-    // 行动经验（本地计算）
-    const xpAmount =
-      kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
-    const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
-    const systemState = await grantXp(currentSaveId, xpAmount, reason, undefined, kind === "complex" ? 2 : 0);
 
     const u = getUsage();
     set({
@@ -881,9 +898,11 @@ export const useStore = create<AppState>((set, get) => ({
     const actions = await db.actions.where("saveId").equals(currentSaveId).toArray();
     const systemState = await getOrCreateSystemState(currentSaveId);
     const savePoints = await db.savePoints.where("saveId").equals(currentSaveId).toArray();
+    const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
+    const bookmarks = await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
     const book = await db.books.get(save.bookId);
     if (!pc || !book) return;
-    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints });
+    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints, highlights, bookmarks });
     download(`书游存档_${save.name}.json`, JSON.stringify(backup, null, 2), "application/json");
   },
 
@@ -1125,6 +1144,9 @@ export const useStore = create<AppState>((set, get) => ({
       redeemed: sp.redeemed,
       messages: sp.messages,
       readChapters: sp.readChapters,
+      regrets: sp.regrets ?? [],
+      readingSeconds: sp.readingSeconds ?? 0,
+      quests: sp.quests ?? [],
     });
     await db.npcMemories.where("saveId").equals(sp.saveId).delete();
     if (sp.npcMemories.length) {

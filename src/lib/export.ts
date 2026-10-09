@@ -13,6 +13,8 @@ import {
   type ActionRecord,
   type SystemState,
   type SavePoint,
+  type Highlight,
+  type Bookmark,
 } from "./db";
 import { offsetTier } from "./actions";
 
@@ -103,11 +105,13 @@ export interface SaveBackup {
   format: "bookplay-save-backup";
   version: 1;
   exportedAt: number;
-  book: { title: string };
+  book: { title: string; templates?: Book["templates"] | null };
   save: Save;
   pc: Character;
   npcMemories: NpcMemory[];
   actions: ActionRecord[];
+  highlights?: Highlight[];
+  bookmarks?: Bookmark[];
   systemState?: {
     xp: number;
     level: number;
@@ -130,16 +134,20 @@ export function buildSaveBackup(ctx: {
   actions: ActionRecord[];
   systemState: SystemState;
   savePoints: SavePoint[];
+  highlights: Highlight[];
+  bookmarks: Bookmark[];
 }): SaveBackup {
   return {
     format: "bookplay-save-backup",
     version: 1,
     exportedAt: Date.now(),
-    book: { title: ctx.book.title },
+    book: { title: ctx.book.title, templates: ctx.book.templates ?? null },
     save: ctx.save,
     pc: ctx.pc,
     npcMemories: ctx.npcMemories,
     actions: ctx.actions,
+    highlights: ctx.highlights,
+    bookmarks: ctx.bookmarks,
     systemState: {
       xp: ctx.systemState.xp,
       level: ctx.systemState.level,
@@ -173,6 +181,10 @@ export async function importSaveBackup(json: string): Promise<string> {
   const book = await db.books.where("title").equals(data.book.title).first();
   if (!book) {
     throw new Error(`请先导入《${data.book.title}》的原文 txt，再导入这个存档`);
+  }
+  // 顺带恢复 AI 开局身份模板（若这本书还没有）
+  if (data.book?.templates && !book.templates) {
+    await db.books.update(book.id!, { templates: data.book.templates });
   }
 
   const saveId = await db.saves.add({
@@ -227,6 +239,28 @@ export async function importSaveBackup(json: string): Promise<string> {
     );
   }
 
+  // 恢复划线 + 书签（旧版备份可能没有这两个字段，按可选处理）
+  if (data.highlights?.length) {
+    await db.highlights.bulkAdd(
+      data.highlights.map((h) => ({
+        saveId,
+        chapterIndex: h.chapterIndex,
+        paraIndex: h.paraIndex,
+        text: h.text,
+        createdAt: h.createdAt,
+      }))
+    );
+  }
+  if (data.bookmarks?.length) {
+    await db.bookmarks.bulkAdd(
+      data.bookmarks.map((b) => ({
+        saveId,
+        chapterIndex: b.chapterIndex,
+        createdAt: b.createdAt,
+      }))
+    );
+  }
+
   // 恢复系统面板（经验/等级/点数）
   if (data.systemState) {
     await db.systemStates.add({
@@ -259,6 +293,9 @@ export async function importSaveBackup(json: string): Promise<string> {
         redeemed: sp.redeemed,
         messages: sp.messages,
         readChapters: sp.readChapters,
+        regrets: sp.regrets ?? [],
+        readingSeconds: sp.readingSeconds ?? 0,
+        quests: sp.quests ?? [],
         npcMemories: sp.npcMemories,
         actions: sp.actions,
       }))

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { classifyAction } from "@/lib/actions";
 
@@ -17,6 +17,7 @@ export default function ActionPanel() {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const submittingRef = useRef(false); // 防重复提交：键盘连按 Enter 会绕过 disabled
 
   // 未开局：提示先开局才能行动
   if (!currentPC) {
@@ -34,11 +35,16 @@ export default function ActionPanel() {
   const kind = text.trim() ? classifyAction(text.trim()) : null;
 
   async function handleSubmit() {
-    if (!text.trim()) return;
+    if (submittingRef.current || !text.trim()) return;
+    submittingRef.current = true;
     setSubmitting(true);
-    await submitAction(text.trim());
-    setText("");
-    setSubmitting(false);
+    try {
+      await submitAction(text.trim());
+      setText("");
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   }
 
   // 折叠态：只显示一条可点击的输入条

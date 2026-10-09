@@ -172,6 +172,9 @@ export interface SavePoint {
   redeemed: { name: string; at: number }[];
   messages: string[];
   readChapters: number[];
+  regrets: string[];          // 意难平清单快照
+  readingSeconds: number;     // 阅读时长快照
+  quests: { text: string; done: boolean }[]; // 支线任务板快照
   npcMemories: NpcMemory[];   // NPC 记忆副本
   actions: ActionRecord[];    // 行动记录副本
 }

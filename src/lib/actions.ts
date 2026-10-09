@@ -8,7 +8,7 @@ export type ActionKind = "simple" | "medium" | "complex";
 
 // —— 分级关键词（按文档模块四）——
 const COMPLEX_KEYWORDS = [
-  "建", "势力", "干预", "主线", "改变", "关键", "捏造",
+  "建立", "势力", "干预", "主线", "改变", "关键", "捏造",
   "杀", "复仇", "推翻", "发动", "篡改", "联盟",
 ];
 const MEDIUM_KEYWORDS = [

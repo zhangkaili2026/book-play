@@ -9,6 +9,8 @@ export default function SavePanel({ onClose }: { onClose: () => void }) {
   const createSavePoint = useStore((s) => s.createSavePoint);
   const restoreSavePoint = useStore((s) => s.restoreSavePoint);
   const deleteSavePoint = useStore((s) => s.deleteSavePoint);
+  const exportSaveBackup = useStore((s) => s.exportSaveBackup);
+  const currentSaveId = useStore((s) => s.currentSaveId);
 
   const [name, setName] = useState("");
 
@@ -93,6 +95,20 @@ export default function SavePanel({ onClose }: { onClose: () => void }) {
             还没有存档点。翻一章会自动存，或点上方「＋存档」手动存。
           </p>
         )}
+      </div>
+
+      {/* 一键备份：把当前存档导出成 JSON 文件，防浏览器清理数据 / 换设备 */}
+      <div className="border-t border-gray-200 p-3 dark:border-gray-700">
+        <button
+          onClick={() => exportSaveBackup()}
+          disabled={currentSaveId == null}
+          className="w-full rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 dark:disabled:bg-gray-700"
+        >
+          ⤓ 备份当前存档（JSON 文件）
+        </button>
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          下载一份存档备份防丢失；换设备时先导入原书、再导入这个文件。
+        </p>
       </div>
     </div>
   );

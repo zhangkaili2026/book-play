@@ -6,13 +6,17 @@
 import { db } from "./db";
 import type { AIResult } from "./ai";
 
-export function buildCacheKey(
-  model: string,
-  pcName: string,
-  chapterIndex: number,
-  action: string
-): string {
-  return `${model}||${pcName}||${chapterIndex}||${action}`;
+export function buildCacheKey(input: {
+  model: string;
+  saveId: number;
+  pcName: string;
+  chapterIndex: number;
+  recentActions: string[];
+  action: string;
+}): string {
+  // 键里带上"存档 id + 最近行动"，避免不同存档 / 不同局势互相错误命中缓存
+  const recent = input.recentActions.join("|");
+  return `${input.model}||${input.saveId}||${input.pcName}||${input.chapterIndex}||${recent}||${input.action}`;
 }
 
 export async function getCached(key: string): Promise<AIResult | null> {

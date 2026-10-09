@@ -64,7 +64,11 @@ export function loadSettings(): AISettings {
 }
 
 export function saveSettings(s: AISettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    /* ignore：localStorage 不可用时静默，避免打断保存流程 */
+  }
 }
 
 // 是否指向本地 Ollama（免费，无需 Key）
@@ -115,7 +119,11 @@ export function addUsage(promptTokens: number, completionTokens: number, cost: n
   d.cost += cost;
   u.days[k] = d;
 
-  localStorage.setItem(USAGE_KEY, JSON.stringify(u));
+  try {
+    localStorage.setItem(USAGE_KEY, JSON.stringify(u));
+  } catch {
+    // ignore：localStorage 写满 / 禁止写入时，统计写不进去但不影响 AI 结果本身
+  }
 }
 
 export function getUsage() {

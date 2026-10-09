@@ -110,25 +110,28 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
     setReachedEndings(getReachedEndings());
   }
 
+  // 有效的复杂行动：AI 真正判定过的才算（未配置/调用失败时 cost 为 null，不算）
+  const complexActions = allActions.filter((a) => a.kind === "complex" && a.cost != null);
+
   const unlocked = checkAchievements({
     offset,
-    complexCount: allActions.filter((a) => a.kind === "complex").length,
+    complexCount: complexActions.length,
     readCount: systemState?.readChapters?.length ?? 0,
     npcCount: npcMemories.length,
     redeemedCount: (systemState?.redeemed ?? []).length,
   });
   const allEndings = ["原著结局", "改变结局", "颠覆结局", "世界反噬"];
 
-  // 重构偏移度趋势（按行动累计）
+  // 重构偏移度趋势（按行动累计；失败的复杂行动未生效，不加偏移）
   const trend: number[] = [];
   let cum = 0;
   for (const a of allActions) {
-    cum = Math.min(1, cum + offsetDeltaFor(a.kind));
+    const delta = a.kind === "complex" && a.cost == null ? 0 : offsetDeltaFor(a.kind);
+    cum = Math.min(1, cum + delta);
     trend.push(cum);
   }
 
   const ending = getEnding(offset);
-  const complexActions = allActions.filter((a) => a.kind === "complex");
   const bookTitle = books.find((b) => b.id === currentBookId)?.title ?? "未命名";
   const pcName = currentPC?.name ?? "我";
   const todaySeconds = getTodayReadingSeconds();

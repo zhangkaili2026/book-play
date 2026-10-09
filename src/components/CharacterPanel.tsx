@@ -52,7 +52,7 @@ export default function CharacterPanel({
   if (!currentPC) return null;
 
   const chapterTitle = chapterList[currentChapterIndex]?.title ?? "—";
-  const bigEvents = allActions.filter((a) => a.kind === "complex");
+  const bigEvents = allActions.filter((a) => a.kind === "complex" && a.cost != null); // 只算真正生效的复杂行动
   const npcs = [...npcMemories].sort((a, b) => b.trust - a.trust);
   const points = systemState?.points ?? 0;
   const redeemedNames = new Set((systemState?.redeemed ?? []).map((r) => r.name));

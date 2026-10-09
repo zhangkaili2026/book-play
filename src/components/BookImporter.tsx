@@ -17,7 +17,11 @@ export default function BookImporter() {
       alert("目前只支持 .txt 文件");
       return;
     }
-    await importBook(file);
+    try {
+      await importBook(file);
+    } catch (e) {
+      alert(`导入失败：${(e as Error).message}`);
+    }
   }
 
   return (
@@ -48,6 +52,7 @@ export default function BookImporter() {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
+            e.target.value = ""; // 允许下次重选同一个文件
             if (file) handleFile(file);
           }}
         />

@@ -49,7 +49,7 @@ export default function MurderMystery({ onClose }: { onClose: () => void }) {
   const btn = "rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-40";
 
   async function sendChat() {
-    if (!script || !chatChar || !chatInput.trim()) return;
+    if (chatBusy || !script || !chatChar || !chatInput.trim()) return; // 防并发，避免回复乱序
     const q = chatInput.trim();
     setChat((c) => [...c, { role: "me", text: q }]);
     setChatInput("");
@@ -251,7 +251,13 @@ export default function MurderMystery({ onClose }: { onClose: () => void }) {
                       <input
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && sendChat()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !chatBusy) {
+                            e.preventDefault();
+                            sendChat();
+                          }
+                        }}
+                        disabled={chatBusy}
                         placeholder={`问 ${chatChar?.name ?? "角色"} 一个问题…`}
                         className="min-w-0 flex-1 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
                       />

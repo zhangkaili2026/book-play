@@ -195,6 +195,10 @@ export function getReadingStreak(): number {
   const data = loadDaily();
   let streak = 0;
   const d = new Date();
+  // 今天还没读时从昨天开始数，避免当天一打开统计就把连续天数清零
+  if ((data.days[dateKey(d)] ?? 0) <= 0) {
+    d.setDate(d.getDate() - 1);
+  }
   while (true) {
     if ((data.days[dateKey(d)] ?? 0) > 0) {
       streak++;

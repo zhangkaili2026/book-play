@@ -149,6 +149,11 @@ export default function Reader() {
 
   // 翻章后恢复到该章上次读到的位置（没记录则回到顶部）
   useEffect(() => {
+    // 先清掉挂起的滚动保存，避免把新章位置写进旧章记录
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
     const el = scrollRef.current;
     if (!el) return;
     const key = `${currentSaveId ?? "book" + currentBookId}:${currentChapterIndex}`;
@@ -176,15 +181,15 @@ export default function Reader() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // 阅读时长统计：每 60 秒累加一次
+  // 阅读时长统计：每 60 秒累加一次（今日时长纯阅读也记；存档内时长只在开局后记）
   useEffect(() => {
-    if (currentSaveId == null) return;
     const timer = setInterval(() => {
-      useStore.getState().addReadingSeconds(60);
       addDailyReadingSeconds(60);
+      const st = useStore.getState();
+      if (st.currentSaveId != null) st.addReadingSeconds(60);
     }, 60000);
     return () => clearInterval(timer);
-  }, [currentSaveId]);
+  }, []);
 
   // 影响回响：早期复杂行动在后续章节的"回音"（本地，0 token）
   useEffect(() => {
@@ -192,17 +197,22 @@ export default function Reader() {
       setEchoes([]);
       return;
     }
+    let cancelled = false;
     db.actions
       .where("saveId")
       .equals(currentSaveId)
       .toArray()
       .then((arr) => {
+        if (cancelled) return; // 切章/切存档后丢弃过期结果
         const past = arr
           .filter((a) => a.kind === "complex" && a.chapterIndex < currentChapterIndex)
           .sort((a, b) => b.chapterIndex - a.chapterIndex)
           .slice(0, 3);
         setEchoes(past);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [currentSaveId, currentChapterIndex]);
 
   // 捕获选中的段落（selectionchange + 防抖，鼠标/触摸通用，支持手机）

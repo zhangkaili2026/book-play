@@ -93,6 +93,7 @@ export default function TTSBar() {
     // 变速：从当前段重新读（应用新速度）
     if (activeRef.current) {
       window.speechSynthesis.cancel();
+      setPaused(false); // 重新朗读，不再是暂停态
       speakPara(paraIndexRef.current);
     }
   }
@@ -102,6 +103,7 @@ export default function TTSBar() {
     if (activeRef.current) {
       window.speechSynthesis.cancel();
       paraIndexRef.current = 0;
+      setPaused(false); // 重读新章，复位暂停态
       speakPara(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,7 +184,17 @@ export default function TTSBar() {
             {TIMERS.map((v) => (
               <button
                 key={v}
-                onClick={() => setTimerMin(v)}
+                onClick={() => {
+                  setTimerMin(v);
+                  // 播放中改定时：立即重新计时
+                  if (timerRef.current) {
+                    clearTimeout(timerRef.current);
+                    timerRef.current = null;
+                  }
+                  if (v > 0 && activeRef.current) {
+                    timerRef.current = setTimeout(stop, v * 60 * 1000);
+                  }
+                }}
                 className={`rounded px-2 py-0.5 text-xs ${
                   timerMin === v
                     ? "bg-blue-100 font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-300"

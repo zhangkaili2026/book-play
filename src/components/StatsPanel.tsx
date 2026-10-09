@@ -87,6 +87,7 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
 
   const [allActions, setAllActions] = useState<ActionRecord[]>([]);
   const [shareTheme, setShareTheme] = useState<ShareTheme>("默认");
+  const [reachedEndings, setReachedEndings] = useState<string[]>(() => getReachedEndings());
 
   useEffect(() => {
     if (currentSaveId == null) {
@@ -103,10 +104,11 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
       });
   }, [currentSaveId]);
 
-  // 记录当前结局到图鉴
-  useEffect(() => {
+  // 在用户"导出报告/分享卡片"时记录当前结局到图鉴（打开面板不自动解锁）
+  function recordEndingNow() {
     recordEnding(getEnding(offset).label);
-  }, [offset]);
+    setReachedEndings(getReachedEndings());
+  }
 
   const unlocked = checkAchievements({
     offset,
@@ -115,7 +117,6 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
     npcCount: npcMemories.length,
     redeemedCount: (systemState?.redeemed ?? []).length,
   });
-  const reachedEndings = getReachedEndings();
   const allEndings = ["原著结局", "改变结局", "颠覆结局", "世界反噬"];
 
   // 重构偏移度趋势（按行动累计）
@@ -273,7 +274,8 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">结局与报告</span>
             <div className="flex gap-2">
               <button
-                onClick={() =>
+                onClick={() => {
+                  recordEndingNow();
                   generateShareCard({
                     pcName,
                     bookTitle,
@@ -285,14 +287,17 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
                     npcCount: npcMemories.length,
                     level: systemState?.level ?? 1,
                     complexActions,
-                  }, shareTheme)
-                }
+                  }, shareTheme);
+                }}
                 className="text-xs text-blue-600 hover:underline dark:text-blue-400"
               >
                 分享卡片
               </button>
               <button
-                onClick={() => download("我的书游报告.md", reportMd)}
+                onClick={() => {
+                  recordEndingNow();
+                  download("我的书游报告.md", reportMd);
+                }}
                 className="text-xs text-blue-600 hover:underline dark:text-blue-400"
               >
                 导出报告

@@ -27,7 +27,10 @@ export function parseChapters(raw: string): ParsedChapter[] {
 
     if (isChapterTitle(trimmed)) {
       // 遇到新标题：先把上一章收尾，再开新章
-      if (current) chapters.push(current);
+      if (current) {
+        current.content = current.content.replace(/\n+$/, ""); // 去掉末尾多余空行
+        chapters.push(current);
+      }
       current = { title: trimmed, content: "" };
     } else if (current) {
       // 正文：保留原始换行（包括空行，用于分段/场景切换）
@@ -38,7 +41,10 @@ export function parseChapters(raw: string): ParsedChapter[] {
     }
   }
 
-  if (current) chapters.push(current);
+  if (current) {
+    current.content = current.content.replace(/\n+$/, "");
+    chapters.push(current);
+  }
   return chapters;
 }
 

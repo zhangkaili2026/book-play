@@ -33,9 +33,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const cacheCount = useStore((s) => s.cacheCount);
   const runCleanup = useStore((s) => s.runCleanup);
 
-  const [s, setS] = useState<AISettings>(loadSettings());
+  const [s, setS] = useState<AISettings>(() => loadSettings());
   const [importMsg, setImportMsg] = useState("");
-  const [goal, setGoal] = useState(getReadingGoalMinutes());
+  const [goal, setGoal] = useState(() => getReadingGoalMinutes());
 
   function update<K extends keyof AISettings>(key: K, value: AISettings[K]) {
     setS((prev) => ({ ...prev, [key]: value }));

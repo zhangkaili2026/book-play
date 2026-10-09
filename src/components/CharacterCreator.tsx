@@ -52,14 +52,21 @@ export default function CharacterCreator() {
   const [connections, setConnections] = useState("");
   const [power, setPower] = useState("");
   const [resources, setResources] = useState("");
+  const [starting, setStarting] = useState(false);
 
+  // 把模板字段安全转成字符串/数组（AI 返回的字段可能缺失或是字符串，不能直接 .join）
+  function asList(v: unknown): string[] {
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === "string") return v.split(/[，,、]/).map((x) => x.trim()).filter(Boolean);
+    return [];
+  }
   function applyTemplate(t: (typeof TEMPLATES)[number]) {
-    setIdentity(t.identity);
-    setFaction(t.faction);
-    setAbilities(t.abilities.join("，"));
-    setConnections(t.connections.join("，"));
-    setPower(t.power);
-    setResources(t.resources.join("，"));
+    setIdentity(String(t.identity ?? ""));
+    setFaction(String(t.faction ?? ""));
+    setAbilities(asList(t.abilities).join("，"));
+    setConnections(asList(t.connections).join("，"));
+    setPower(String(t.power ?? ""));
+    setResources(asList(t.resources).join("，"));
   }
 
   // 逗号/顿号分隔 → 数组
@@ -71,11 +78,15 @@ export default function CharacterCreator() {
   }
 
   async function handleStart() {
+    if (starting) return; // 防连点重复创建存档
     if (!name.trim()) {
       alert("请给角色起个名字");
       return;
     }
-    if (currentBookId == null) return;
+    if (currentBookId == null) {
+      alert("尚未选择书籍，无法开局");
+      return;
+    }
 
     const pc: NewPC = {
       name: name.trim(),
@@ -86,7 +97,12 @@ export default function CharacterCreator() {
       power: power.trim() || "无",
       resources: splitList(resources),
     };
-    await createSave(currentBookId, saveName.trim() || `存档${saves.length + 1}`, pc);
+    setStarting(true);
+    try {
+      await createSave(currentBookId, saveName.trim() || `存档${saves.length + 1}`, pc);
+    } finally {
+      setStarting(false);
+    }
   }
 
   const inputCls =
@@ -116,9 +132,9 @@ export default function CharacterCreator() {
                 <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">未接入 AI，使用通用模板</p>
               )}
               <div className="flex flex-wrap gap-2">
-                {(templates?.items ?? TEMPLATES).map((t) => (
+                {(templates?.items ?? TEMPLATES).map((t, i) => (
                   <button
-                    key={t.label}
+                    key={i}
                     onClick={() => applyTemplate(t)}
                     className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                   >
@@ -211,9 +227,10 @@ export default function CharacterCreator() {
           <div className="flex gap-3 pt-2">
             <button
               onClick={handleStart}
-              className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              disabled={starting}
+              className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
             >
-              开始游玩
+              {starting ? "创建中…" : "开始游玩"}
             </button>
             <button
               onClick={closeCreator}

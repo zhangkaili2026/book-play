@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { db } from "@/lib/db";
 import { useStore } from "@/lib/store";
 
@@ -19,8 +19,11 @@ export default function SearchPanel({ onClose }: { onClose: () => void }) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const seqRef = useRef(0); // 请求序号：丢弃已过期的搜索结果
+
   // 防抖搜索
   useEffect(() => {
+    const seq = ++seqRef.current;
     if (!query.trim() || currentBookId == null) {
       setResults([]);
       return;
@@ -45,6 +48,7 @@ export default function SearchPanel({ onClose }: { onClose: () => void }) {
         });
         if (found.length >= 50) break;
       }
+      if (seq !== seqRef.current) return; // 已过期，丢弃
       setResults(found);
       setSearching(false);
     }, 250);
@@ -80,7 +84,7 @@ export default function SearchPanel({ onClose }: { onClose: () => void }) {
         ) : query.trim() && results.length === 0 ? (
           <p className="text-sm text-gray-400 dark:text-gray-500">没有找到「{query}」</p>
         ) : query.trim() ? (
-          <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">找到 {results.length} 处</p>
+          <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">找到 {results.length} 章</p>
         ) : (
           <p className="text-sm text-gray-400 dark:text-gray-500">输入关键词搜索全文</p>
         )}

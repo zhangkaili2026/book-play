@@ -97,6 +97,10 @@ export default function Reader() {
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   function onTouchStart(e: React.TouchEvent) {
+    if (e.touches.length !== 1) {
+      touchStartRef.current = null;
+      return;
+    }
     const t = e.touches[0];
     touchStartRef.current = { x: t.clientX, y: t.clientY };
   }
@@ -105,6 +109,7 @@ export default function Reader() {
     const start = touchStartRef.current;
     touchStartRef.current = null;
     if (!start) return;
+    if (e.touches.length || !window.getSelection()?.isCollapsed) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - start.x;
     const dy = t.clientY - start.y;
@@ -158,6 +163,13 @@ export default function Reader() {
     if (!el) return;
     const key = `${currentSaveId ?? "book" + currentBookId}:${currentChapterIndex}`;
     el.scrollTop = getScrollPos(key);
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      setScrollPos(key, el.scrollTop);
+    };
   }, [currentChapterIndex, currentSaveId, currentBookId]);
 
   // 键盘快捷键：← / → 翻章（输入框内不触发）
@@ -264,6 +276,7 @@ export default function Reader() {
       onScroll={handleScroll}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
+      onTouchCancel={() => { touchStartRef.current = null; }}
     >
       {/* 全书进度条（细、吸顶） */}
       <div className="sticky top-0 z-10 h-0.5 w-full bg-gray-200/60 dark:bg-gray-700/60">

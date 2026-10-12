@@ -19,6 +19,7 @@ export default function TTSBar() {
   const [voiceName, setVoiceName] = useState("");
 
   const activeRef = useRef(false);
+  const generationRef = useRef(0);
   const speedRef = useRef(1);
   const paraIndexRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -27,6 +28,8 @@ export default function TTSBar() {
   const supported = typeof window !== "undefined" && "speechSynthesis" in window;
 
   function stop() {
+    activeRef.current = false;
+    generationRef.current++;
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
       window.speechSynthesis.cancel();
     }
@@ -58,12 +61,19 @@ export default function TTSBar() {
     u.lang = "zh-CN";
     u.rate = speedRef.current;
     if (voiceRef.current) u.voice = voiceRef.current;
-    u.onend = () => speakPara(index + 1);
+    const generation = generationRef.current;
+    u.onend = () => {
+      if (generation === generationRef.current) speakPara(index + 1);
+    };
+    u.onerror = () => {
+      if (generation === generationRef.current) stop();
+    };
     window.speechSynthesis.speak(u);
   }
 
   function start() {
     if (!supported) return;
+    generationRef.current++;
     window.speechSynthesis.cancel();
     activeRef.current = true;
     speedRef.current = speed;
@@ -92,6 +102,7 @@ export default function TTSBar() {
     setSpeed(v);
     // 变速：从当前段重新读（应用新速度）
     if (activeRef.current) {
+      generationRef.current++;
       window.speechSynthesis.cancel();
       setPaused(false); // 重新朗读，不再是暂停态
       speakPara(paraIndexRef.current);
@@ -101,6 +112,7 @@ export default function TTSBar() {
   // 章节变化时，若正在播放，从头读新章
   useEffect(() => {
     if (activeRef.current) {
+      generationRef.current++;
       window.speechSynthesis.cancel();
       paraIndexRef.current = 0;
       setPaused(false); // 重读新章，复位暂停态
@@ -111,6 +123,7 @@ export default function TTSBar() {
 
   // 加载中文音色
   useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
     function loadVoices() {
       const vs = window.speechSynthesis
         .getVoices()
@@ -118,15 +131,18 @@ export default function TTSBar() {
       setVoices(vs);
     }
     loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
     return () => {
-      window.speechSynthesis.onvoiceschanged = null;
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
     };
   }, []);
 
   // 卸载时停止
   useEffect(() => {
+    const generation = generationRef;
     return () => {
+      activeRef.current = false;
+      generation.current++;
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         window.speechSynthesis.cancel();
       }

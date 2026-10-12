@@ -367,6 +367,10 @@ interface AppState {
   setReadingBg: (b: ReadingBgChoice) => void;
 }
 
+let bookRequest = 0;
+let saveRequest = 0;
+let chapterRequest = 0;
+
 const readingPrefs = loadReadingPrefs();
 
 export const useStore = create<AppState>((set, get) => ({
@@ -519,6 +523,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async openBook(bookId: number) {
+    const request = ++bookRequest;
+    saveRequest++;
+    chapterRequest++;
     const chapters = await db.chapters
       .where("bookId")
       .equals(bookId)
@@ -532,6 +539,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     const saves = await db.saves.where("bookId").equals(bookId).sortBy("createdAt");
     const book = await db.books.get(bookId);
+    if (request !== bookRequest || !book) return;
 
     set({
       currentBookId: bookId,
@@ -557,11 +565,12 @@ export const useStore = create<AppState>((set, get) => ({
     if (saves.length > 0) {
       await get().switchSave(saves[saves.length - 1].id!);
     } else {
-      await get().gotoChapter(0);
+      await get().gotoChapter(book?.lastReadIndex ?? 0);
     }
   },
 
   async gotoChapter(index: number) {
+    const request = ++chapterRequest;
     const { currentBookId, currentSaveId, chapterList, currentChapterIndex } = get();
     if (currentBookId == null || index < 0 || index >= chapterList.length) return;
 
@@ -570,11 +579,12 @@ export const useStore = create<AppState>((set, get) => ({
       .equals([currentBookId, index])
       .first();
 
-    if (!chapter) return;
+    if (!chapter || request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
     // 自动存档：真正翻到新的一章时，先存当前章的快照
     if (currentSaveId != null && index !== currentChapterIndex) {
       await get().autoSavePoint();
     }
+    if (request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
     set({ currentChapterIndex: index, currentContent: chapter.content, selection: null });
 
     if (currentSaveId != null) {
@@ -583,7 +593,7 @@ export const useStore = create<AppState>((set, get) => ({
       const sys = await getOrCreateSystemState(currentSaveId);
       if (!sys.readChapters.includes(index)) {
         const updated = await grantXp(currentSaveId, XP_RULES.newChapter, "阅读新章节", index);
-        set({ systemState: updated });
+        if (request === chapterRequest && get().currentSaveId === currentSaveId) set({ systemState: updated });
       }
     } else {
       await db.books.update(currentBookId, { lastReadIndex: index });
@@ -591,8 +601,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async switchSave(saveId: number) {
+    const request = ++saveRequest;
+    chapterRequest++;
+    const bookId = get().currentBookId;
     const save = await db.saves.get(saveId);
-    if (!save) return;
+    if (!save || save.bookId !== bookId || request !== saveRequest) return;
 
     const pc = await db.characters
       .where("saveId")
@@ -609,6 +622,7 @@ export const useStore = create<AppState>((set, get) => ({
     savePoints.sort((a, b) => b.createdAt - a.createdAt);
     const highlights = await db.highlights.where("saveId").equals(saveId).toArray();
     const bookmarks = await db.bookmarks.where("saveId").equals(saveId).toArray();
+    if (request !== saveRequest || get().currentBookId !== bookId) return;
 
     set({
       currentSaveId: saveId,
@@ -781,7 +795,7 @@ export const useStore = create<AppState>((set, get) => ({
               action: text,
             });
             const ai = await callLLM(messages);
-            await setCached(cacheKey, ai);
+            await setCached(cacheKey, ai).catch((error) => console.warn("AI cache write failed", error));
             result = ai.content;
             aiPrompt = ai.promptTokens;
             aiCompletion = ai.completionTokens;
@@ -797,54 +811,58 @@ export const useStore = create<AppState>((set, get) => ({
       result = resolveAction(text, kind, currentPC?.name ?? "你");
     }
 
-    await db.actions.add({
-      saveId: currentSaveId,
-      chapterIndex: currentChapterIndex,
-      kind,
-      content: text,
-      result,
-      createdAt: Date.now(),
-      paraIndex: selection?.paraIndex,
-      ...(aiCost != null
-        ? { cost: aiCost, promptTokens: aiPrompt, completionTokens: aiCompletion, cached: aiCached }
-        : {}),
-    });
+    await db.transaction("rw", [db.saves, db.actions, db.systemStates, db.npcMemories], async () => {
+      if (!await db.saves.get(currentSaveId)) return;
+      await db.actions.add({
+        saveId: currentSaveId,
+        chapterIndex: currentChapterIndex,
+        kind,
+        content: text,
+        result,
+        createdAt: Date.now(),
+        paraIndex: selection?.paraIndex,
+        ...(aiCost != null
+          ? { cost: aiCost, promptTokens: aiPrompt, completionTokens: aiCompletion, cached: aiCached }
+          : {}),
+      });
 
-    // 只有"真正生效"的行动才推进偏移度 / NPC 关系 / 经验（AI 未判定/失败不算）
-    let newOffset = (await db.saves.get(currentSaveId))?.offset ?? 0;
-    let systemState = get().systemState;
-    if (effective) {
-      newOffset = Math.min(1, newOffset + offsetDeltaFor(kind));
-      await db.saves.update(currentSaveId, { offset: newOffset });
+      // 只有"真正生效"的行动才推进偏移度 / NPC 关系 / 经验（AI 未判定/失败不算）
+      let newOffset = (await db.saves.get(currentSaveId))?.offset ?? 0;
+      let systemState = get().systemState;
+      if (effective) {
+        newOffset = Math.min(1, newOffset + offsetDeltaFor(kind));
+        await db.saves.update(currentSaveId, { offset: newOffset });
 
-      if (kind !== "simple") {
-        const target = extractTargetName(text);
-        if (target && target !== currentPC?.name) {
-          await upsertNpcMemory(currentSaveId, target, kind);
+        if (kind !== "simple") {
+          const target = extractTargetName(text);
+          if (target && target !== currentPC?.name) {
+            await upsertNpcMemory(currentSaveId, target, kind);
+          }
         }
+
+        const xpAmount =
+          kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
+        const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
+        systemState = await grantXp(currentSaveId, xpAmount, reason, undefined, kind === "complex" ? 2 : 0);
       }
 
-      const xpAmount =
-        kind === "complex" ? XP_RULES.complex : kind === "medium" ? XP_RULES.medium : XP_RULES.simple;
-      const reason = kind === "complex" ? "复杂行动" : kind === "medium" ? "中等行动" : "简单行动";
-      systemState = await grantXp(currentSaveId, xpAmount, reason, undefined, kind === "complex" ? 2 : 0);
-    }
+      const recent = await db.actions.where("saveId").equals(currentSaveId).toArray();
+      recent.sort((a, b) => b.createdAt - a.createdAt);
+      const npcMemories = await db.npcMemories.where("saveId").equals(currentSaveId).toArray();
 
-    const recent = await db.actions.where("saveId").equals(currentSaveId).toArray();
-    recent.sort((a, b) => b.createdAt - a.createdAt);
-    const npcMemories = await db.npcMemories.where("saveId").equals(currentSaveId).toArray();
-
-    const u = getUsage();
-    set({
-      offset: newOffset,
-      recentActions: recent.slice(0, 20),
-      allActions: recent,
-      npcMemories,
-      systemState,
-      todayCost: u.todayCost,
-      totalCost: u.totalCost,
-      totalTokens: u.totalPrompt + u.totalCompletion,
-      selection: null, // 行动已锚定，清除选区
+      if (get().currentSaveId !== currentSaveId) return;
+      const u = getUsage();
+      set({
+        offset: newOffset,
+        recentActions: recent.slice(0, 20),
+        allActions: recent,
+        npcMemories,
+        systemState,
+        todayCost: u.todayCost,
+        totalCost: u.totalCost,
+        totalTokens: u.totalPrompt + u.totalCompletion,
+        selection: null, // 行动已锚定，清除选区
+      });
     });
   },
 

@@ -24,7 +24,8 @@ export function parseChapters(raw: string): ParsedChapter[] {
   const chapters: ParsedChapter[] = [];
   let current: ParsedChapter | null = null;
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex];
     const trimmed = line.trim();
 
     if (isChapterTitle(trimmed)) {
@@ -34,6 +35,14 @@ export function parseChapters(raw: string): ParsedChapter[] {
         chapters.push(current);
       }
       current = { title: trimmed, content: "" };
+      // 仅扩展目录标题，第二行仍保留在正文，避免误判时吞掉原文。
+      const subtitle = lines[lineIndex + 1]?.trim() ?? "";
+      if (/^(第[零一二三四五六七八九十百千万0-9]+[章节回卷集部篇]|Chapter\s+\d+)$/i.test(trimmed)
+        && subtitle.length > 0 && subtitle.length <= 20
+        && !isChapterTitle(subtitle) && !/[。！？；：.!?;:]/.test(subtitle)
+        && lines[lineIndex + 2]?.trim() === "") {
+        current.title = `${trimmed} ${subtitle}`;
+      }
     } else if (current) {
       // 正文：保留原始换行（包括空行，用于分段/场景切换）
       current.content += line + "\n";
@@ -49,6 +58,3 @@ export function parseChapters(raw: string): ParsedChapter[] {
   }
   return chapters;
 }
-
-// 已知局限：像 "第一章\n风起云涌" 这种标题和名字分两行的写法，
-// 目前会把 "风起云涌" 当成正文第一行。后续可加"短标题回看合并"来修。

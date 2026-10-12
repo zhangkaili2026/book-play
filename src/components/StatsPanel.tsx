@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db, type ActionRecord } from "@/lib/db";
+import { useState } from "react";
+import { type ActionRecord } from "@/lib/db";
 import { useStore } from "@/lib/store";
 import { offsetDeltaFor, offsetTier, getEnding } from "@/lib/actions";
 import { download } from "@/lib/export";
@@ -75,7 +75,6 @@ function OffsetSparkline({ trend }: { trend: number[] }) {
 
 // 统计面板：阅读数据 + 偏移度趋势
 export default function StatsPanel({ onClose }: { onClose: () => void }) {
-  const currentSaveId = useStore((s) => s.currentSaveId);
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
   const offset = useStore((s) => s.offset);
@@ -85,24 +84,9 @@ export default function StatsPanel({ onClose }: { onClose: () => void }) {
   const currentBookId = useStore((s) => s.currentBookId);
   const currentPC = useStore((s) => s.currentPC);
 
-  const [allActions, setAllActions] = useState<ActionRecord[]>([]);
+  const allActions = [...useStore((s) => s.allActions)].sort((a, b) => a.createdAt - b.createdAt);
   const [shareTheme, setShareTheme] = useState<ShareTheme>("默认");
   const [reachedEndings, setReachedEndings] = useState<string[]>(() => getReachedEndings());
-
-  useEffect(() => {
-    if (currentSaveId == null) {
-      setAllActions([]);
-      return;
-    }
-    db.actions
-      .where("saveId")
-      .equals(currentSaveId)
-      .toArray()
-      .then((arr) => {
-        arr.sort((a, b) => a.createdAt - b.createdAt);
-        setAllActions(arr);
-      });
-  }, [currentSaveId]);
 
   // 在用户"导出报告/分享卡片"时记录当前结局到图鉴（打开面板不自动解锁）
   function recordEndingNow() {

@@ -26,9 +26,8 @@ export async function callLLM(
   // 30 秒超时：网络半开 / AI 服务假死时不能卡死界面
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30_000);
-  let res: Response;
   try {
-    res = await fetch(`${s.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    const res = await fetch(`${s.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -42,32 +41,32 @@ export async function callLLM(
       }),
       signal: controller.signal,
     });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`API 请求失败 (${res.status})：${text.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const content: string = data.choices?.[0]?.message?.content ?? "";
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error("AI 返回内容为空");
+    }
+    const promptTokens: number = data.usage?.prompt_tokens ?? 0;
+    const completionTokens: number = data.usage?.completion_tokens ?? 0;
+    const cost =
+      (promptTokens * s.inputPricePerM + completionTokens * s.outputPricePerM) / 1_000_000;
+
+    addUsage(promptTokens, completionTokens, cost);
+    return { content, promptTokens, completionTokens, cost };
   } catch (e) {
     if (controller.signal.aborted) {
-      throw new Error("AI 请求超时（30 秒无响应），请检查网络或 AI 服务是否正常");
+      throw new Error("AI 请求超时（30 秒内未完成），请检查网络或 AI 服务是否正常");
     }
     throw e;
   } finally {
     clearTimeout(timer);
   }
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API 请求失败 (${res.status})：${text.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  const content: string = data.choices?.[0]?.message?.content ?? "";
-  if (!content.trim()) {
-    throw new Error("AI 返回内容为空");
-  }
-  const promptTokens: number = data.usage?.prompt_tokens ?? 0;
-  const completionTokens: number = data.usage?.completion_tokens ?? 0;
-  const cost =
-    (promptTokens * s.inputPricePerM + completionTokens * s.outputPricePerM) / 1_000_000;
-
-  addUsage(promptTokens, completionTokens, cost);
-  return { content, promptTokens, completionTokens, cost };
 }
 
 // 组装「世界回应器」提示词。关键：输入量恒定（只带角色摘要 + 最近 5 条行动），
@@ -109,7 +108,7 @@ export function buildActionPrompt(ctx: {
     `【能力】${ctx.pc.abilities.join("、") || "无"}；【势力】${ctx.pc.power}；【资源】${ctx.pc.resources.join("、") || "无"}`,
     `【当前章节】${ctx.chapterTitle}`,
     ctx.recentActions.length
-      ? `【最近行动】${ctx.recentActions.map((a, i) => `${i + 1}. ${a}`).join("；")}`
+      ? `【最近行动】${ctx.recentActions.slice(0, 5).map((a, i) => `${i + 1}. ${a}`).join("；")}`
       : "",
     `【本次行动】${ctx.action}`,
     "",

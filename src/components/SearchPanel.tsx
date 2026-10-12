@@ -24,12 +24,15 @@ export default function SearchPanel({ onClose }: { onClose: () => void }) {
   // 防抖搜索
   useEffect(() => {
     const seq = ++seqRef.current;
+    let cancelled = false;
     if (!query.trim() || currentBookId == null) {
       setResults([]);
+      setSearching(false);
       return;
     }
     setSearching(true);
     const timer = setTimeout(async () => {
+      try {
       const q = query.trim().toLowerCase();
       const chapters = await db.chapters.where("bookId").equals(currentBookId).sortBy("index");
       const found: SearchResult[] = [];
@@ -48,11 +51,20 @@ export default function SearchPanel({ onClose }: { onClose: () => void }) {
         });
         if (found.length >= 50) break;
       }
-      if (seq !== seqRef.current) return; // 已过期，丢弃
+      if (cancelled || seq !== seqRef.current) return; // 已过期，丢弃
       setResults(found);
       setSearching(false);
+      } catch {
+        if (!cancelled && seq === seqRef.current) {
+          setResults([]);
+          setSearching(false);
+        }
+      }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      cancelled = true;
+    };
   }, [query, currentBookId]);
 
   return (

@@ -183,124 +183,126 @@ export async function importSaveBackup(json: string): Promise<string> {
     throw new Error(`请先导入《${data.book.title}》的原文 txt，再导入这个存档`);
   }
   // 顺带恢复 AI 开局身份模板（若这本书还没有）
-  if (data.book?.templates && !book.templates) {
-    await db.books.update(book.id!, { templates: data.book.templates });
-  }
+  return db.transaction("rw", [db.books, db.saves, db.characters, db.npcMemories, db.actions, db.highlights, db.bookmarks, db.systemStates, db.savePoints], async () => {
+    if (data.book?.templates && !book.templates) {
+      await db.books.update(book.id!, { templates: data.book.templates });
+    }
 
-  const saveId = await db.saves.add({
-    bookId: book.id!,
-    name: `${data.save.name}（导入）`,
-    pcId: 0,
-    offset: data.save.offset,
-    createdAt: Date.now(),
-    lastChapterIndex: data.save.lastChapterIndex,
-  });
-
-  const pcId = await db.characters.add({
-    saveId,
-    name: data.pc.name,
-    isPC: true,
-    identity: data.pc.identity,
-    faction: data.pc.faction,
-    abilities: data.pc.abilities,
-    connections: data.pc.connections,
-    power: data.pc.power,
-    resources: data.pc.resources,
-  });
-  await db.saves.update(saveId, { pcId });
-
-  if (data.npcMemories?.length) {
-    await db.npcMemories.bulkAdd(
-      data.npcMemories.map((m) => ({
-        saveId,
-        npcName: m.npcName,
-        attitude: m.attitude,
-        trust: m.trust,
-        remembered: m.remembered,
-        tendency: m.tendency,
-        relationHistory: m.relationHistory,
-      }))
-    );
-  }
-  if (data.actions?.length) {
-    await db.actions.bulkAdd(
-      data.actions.map((a) => ({
-        saveId,
-        chapterIndex: a.chapterIndex,
-        kind: a.kind,
-        content: a.content,
-        result: a.result,
-        createdAt: a.createdAt,
-        paraIndex: a.paraIndex,
-        ...(a.cost != null
-          ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
-          : {}),
-      }))
-    );
-  }
-
-  // 恢复划线 + 书签（旧版备份可能没有这两个字段，按可选处理）
-  if (data.highlights?.length) {
-    await db.highlights.bulkAdd(
-      data.highlights.map((h) => ({
-        saveId,
-        chapterIndex: h.chapterIndex,
-        paraIndex: h.paraIndex,
-        text: h.text,
-        createdAt: h.createdAt,
-      }))
-    );
-  }
-  if (data.bookmarks?.length) {
-    await db.bookmarks.bulkAdd(
-      data.bookmarks.map((b) => ({
-        saveId,
-        chapterIndex: b.chapterIndex,
-        createdAt: b.createdAt,
-      }))
-    );
-  }
-
-  // 恢复系统面板（经验/等级/点数）
-  if (data.systemState) {
-    await db.systemStates.add({
-      saveId,
-      xp: data.systemState.xp ?? 0,
-      level: data.systemState.level ?? 1,
-      points: data.systemState.points ?? 0,
-      redeemed: data.systemState.redeemed ?? [],
-      messages: data.systemState.messages ?? [],
-      readChapters: data.systemState.readChapters ?? [],
-      regrets: data.systemState.regrets ?? [],
-      readingSeconds: data.systemState.readingSeconds ?? 0,
-      quests: data.systemState.quests ?? [],
+    const saveId = await db.saves.add({
+      bookId: book.id!,
+      name: `${data.save.name}（导入）`,
+      pcId: 0,
+      offset: data.save.offset,
+      createdAt: Date.now(),
+      lastChapterIndex: data.save.lastChapterIndex,
     });
-  }
 
-  // 恢复存档点
-  if (data.savePoints?.length) {
-    await db.savePoints.bulkAdd(
-      data.savePoints.map((sp) => ({
+    const pcId = await db.characters.add({
+      saveId,
+      name: data.pc.name,
+      isPC: true,
+      identity: data.pc.identity,
+      faction: data.pc.faction,
+      abilities: data.pc.abilities,
+      connections: data.pc.connections,
+      power: data.pc.power,
+      resources: data.pc.resources,
+    });
+    await db.saves.update(saveId, { pcId });
+
+    if (data.npcMemories?.length) {
+      await db.npcMemories.bulkAdd(
+        data.npcMemories.map((m) => ({
+          saveId,
+          npcName: m.npcName,
+          attitude: m.attitude,
+          trust: m.trust,
+          remembered: m.remembered,
+          tendency: m.tendency,
+          relationHistory: m.relationHistory,
+        }))
+      );
+    }
+    if (data.actions?.length) {
+      await db.actions.bulkAdd(
+        data.actions.map((a) => ({
+          saveId,
+          chapterIndex: a.chapterIndex,
+          kind: a.kind,
+          content: a.content,
+          result: a.result,
+          createdAt: a.createdAt,
+          paraIndex: a.paraIndex,
+          ...(a.cost != null
+            ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
+            : {}),
+        }))
+      );
+    }
+
+    // 恢复划线 + 书签（旧版备份可能没有这两个字段，按可选处理）
+    if (data.highlights?.length) {
+      await db.highlights.bulkAdd(
+        data.highlights.map((h) => ({
+          saveId,
+          chapterIndex: h.chapterIndex,
+          paraIndex: h.paraIndex,
+          text: h.text,
+          createdAt: h.createdAt,
+        }))
+      );
+    }
+    if (data.bookmarks?.length) {
+      await db.bookmarks.bulkAdd(
+        data.bookmarks.map((b) => ({
+          saveId,
+          chapterIndex: b.chapterIndex,
+          createdAt: b.createdAt,
+        }))
+      );
+    }
+
+    // 恢复系统面板（经验/等级/点数）
+    if (data.systemState) {
+      await db.systemStates.add({
         saveId,
-        name: sp.name,
-        isAuto: sp.isAuto,
-        createdAt: sp.createdAt,
-        chapterIndex: sp.chapterIndex,
-        offset: sp.offset,
-        xp: sp.xp,
-        level: sp.level,
-        points: sp.points,
-        redeemed: sp.redeemed,
-        messages: sp.messages,
-        readChapters: sp.readChapters,
-        regrets: sp.regrets ?? [],
-        readingSeconds: sp.readingSeconds ?? 0,
-        quests: sp.quests ?? [],
-        npcMemories: sp.npcMemories,
-        actions: sp.actions,
-      }))
-    );
-  }
+        xp: data.systemState.xp ?? 0,
+        level: data.systemState.level ?? 1,
+        points: data.systemState.points ?? 0,
+        redeemed: data.systemState.redeemed ?? [],
+        messages: data.systemState.messages ?? [],
+        readChapters: data.systemState.readChapters ?? [],
+        regrets: data.systemState.regrets ?? [],
+        readingSeconds: data.systemState.readingSeconds ?? 0,
+        quests: data.systemState.quests ?? [],
+      });
+    }
 
-  return data.book.title;
+    // 恢复存档点
+    if (data.savePoints?.length) {
+      await db.savePoints.bulkAdd(
+        data.savePoints.map((sp) => ({
+          saveId,
+          name: sp.name,
+          isAuto: sp.isAuto,
+          createdAt: sp.createdAt,
+          chapterIndex: sp.chapterIndex,
+          offset: sp.offset,
+          xp: sp.xp,
+          level: sp.level,
+          points: sp.points,
+          redeemed: sp.redeemed,
+          messages: sp.messages,
+          readChapters: sp.readChapters,
+          regrets: sp.regrets ?? [],
+          readingSeconds: sp.readingSeconds ?? 0,
+          quests: sp.quests ?? [],
+          npcMemories: sp.npcMemories,
+          actions: sp.actions,
+        }))
+      );
+    }
+
+    return data.book.title;
+  });
 }

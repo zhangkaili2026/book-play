@@ -21,5 +21,9 @@ export function getScrollPos(compositeKey: string): number {
 export function setScrollPos(compositeKey: string, pos: number): void {
   const map = loadMap();
   map[compositeKey] = Math.max(0, Math.round(pos));
-  localStorage.setItem(KEY, JSON.stringify(map));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(map));
+  } catch {
+    // 存储受限时仍允许阅读和翻章。
+  }
 }

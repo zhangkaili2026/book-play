@@ -18,8 +18,7 @@ export function buildCacheKey(input: {
   action: string;
 }): string {
   // 键里带上"存档 id + 最近行动"，避免不同存档 / 不同局势互相错误命中缓存
-  const recent = input.recentActions.join("|");
-  return `${input.model}||${input.saveId}||${input.pcName}||${input.chapterIndex}||${recent}||${input.action}`;
+  return JSON.stringify([input.model, input.saveId, input.pcName, input.chapterIndex, input.recentActions, input.action]);
 }
 
 export async function getCached(key: string): Promise<AIResult | null> {
@@ -36,24 +35,26 @@ export async function getCached(key: string): Promise<AIResult | null> {
 
 export async function setCached(key: string, result: AIResult): Promise<void> {
   // 覆盖同键旧条目，避免重复累积
-  await db.aiCache.where("key").equals(key).delete();
-  await db.aiCache.add({
-    key,
-    result: result.content,
-    promptTokens: result.promptTokens,
-    completionTokens: result.completionTokens,
-    cost: result.cost,
-    createdAt: Date.now(),
+  await db.transaction("rw", db.aiCache, async () => {
+    await db.aiCache.where("key").equals(key).delete();
+    await db.aiCache.add({
+      key,
+      result: result.content,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+      cost: result.cost,
+      createdAt: Date.now(),
+    });
+    // 超上限时按主键（插入顺序）淘汰最旧条目，避免无限增长
+    const count = await db.aiCache.count();
+    if (count > MAX_CACHE_ENTRIES) {
+      const oldest = await db.aiCache
+        .orderBy(":id")
+        .limit(count - MAX_CACHE_ENTRIES)
+        .primaryKeys();
+      if (oldest.length) await db.aiCache.bulkDelete(oldest);
+    }
   });
-  // 超上限时按主键（插入顺序）淘汰最旧条目，避免无限增长
-  const count = await db.aiCache.count();
-  if (count > MAX_CACHE_ENTRIES) {
-    const oldest = await db.aiCache
-      .orderBy(":id")
-      .limit(count - MAX_CACHE_ENTRIES)
-      .primaryKeys();
-    if (oldest.length) await db.aiCache.bulkDelete(oldest);
-  }
 }
 
 export async function getCacheCount(): Promise<number> {

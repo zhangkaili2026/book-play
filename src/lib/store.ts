@@ -140,23 +140,26 @@ async function upsertNpcMemory(
 
 // 读取（或懒创建）某存档的系统状态
 async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
-  let sys = await db.systemStates.where("saveId").equals(saveId).first();
-  if (!sys) {
-    const id = await db.systemStates.add({
-      saveId,
-      xp: 0,
-      level: 1,
-      points: 0,
-      redeemed: [],
-      messages: ["系统已激活"],
-      readChapters: [],
-      regrets: [],
-      readingSeconds: 0,
-      quests: [],
-    });
-    sys = (await db.systemStates.get(id))!;
-  }
-  return sys;
+  return db.transaction("rw", [db.saves, db.systemStates], async () => {
+    if (!await db.saves.get(saveId)) throw new Error("Save no longer exists");
+    let sys = await db.systemStates.where("saveId").equals(saveId).first();
+    if (!sys) {
+      const id = await db.systemStates.add({
+        saveId,
+        xp: 0,
+        level: 1,
+        points: 0,
+        redeemed: [],
+        messages: ["系统已激活"],
+        readChapters: [],
+        regrets: [],
+        readingSeconds: 0,
+        quests: [],
+      });
+      sys = (await db.systemStates.get(id))!;
+    }
+    return sys;
+  });
 }
 
 // 发放经验：计算升级/点数，写回库，返回更新后的状态
@@ -167,41 +170,60 @@ async function grantXp(
   markChapterRead?: number,
   bonusPoints = 0
 ): Promise<SystemState> {
-  const sys = await getOrCreateSystemState(saveId);
-  const xp = sys.xp + amount;
-  const level = Math.floor(xp / XP_PER_LEVEL) + 1;
-  const levelUps = level - sys.level;
-  const points = sys.points + levelUps * POINTS_PER_LEVEL + bonusPoints;
+  return db.transaction("rw", [db.saves, db.systemStates], async () => {
+    const sys = await getOrCreateSystemState(saveId);
+    if (markChapterRead != null && sys.readChapters.includes(markChapterRead)) return sys;
+    const xp = sys.xp + amount;
+    const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+    const levelUps = level - sys.level;
+    const points = sys.points + levelUps * POINTS_PER_LEVEL + bonusPoints;
 
-  const messages = [...sys.messages, `+${amount} 经验（${reason}）`];
-  if (levelUps > 0) {
-    messages.push(`🎉 升级到 ${level} 级，获得 ${levelUps * POINTS_PER_LEVEL} 点数`);
-  }
-  if (bonusPoints > 0) {
-    messages.push(`+${bonusPoints} 点数（关键事件）`);
-  }
+    const messages = [...sys.messages, `+${amount} 经验（${reason}）`];
+    if (levelUps > 0) {
+      messages.push(`🎉 升级到 ${level} 级，获得 ${levelUps * POINTS_PER_LEVEL} 点数`);
+    }
+    if (bonusPoints > 0) {
+      messages.push(`+${bonusPoints} 点数（关键事件）`);
+    }
 
-  const readChapters =
-    markChapterRead != null && !sys.readChapters.includes(markChapterRead)
-      ? [...sys.readChapters, markChapterRead]
-      : sys.readChapters;
+    const readChapters =
+      markChapterRead != null && !sys.readChapters.includes(markChapterRead)
+        ? [...sys.readChapters, markChapterRead]
+        : sys.readChapters;
 
-  const next: SystemState = {
-    ...sys,
-    xp,
-    level,
-    points,
-    messages: messages.slice(-20),
-    readChapters,
-  };
-  await db.systemStates.update(sys.id!, {
-    xp,
-    level,
-    points,
-    messages: next.messages,
-    readChapters,
+    const next: SystemState = {
+      ...sys,
+      xp,
+      level,
+      points,
+      messages: messages.slice(-20),
+      readChapters,
+    };
+    await db.systemStates.update(sys.id!, {
+      xp,
+      level,
+      points,
+      messages: next.messages,
+      readChapters,
+    });
+    return next;
   });
-  return next;
+}
+
+// Always read the latest database state while holding the write transaction.
+async function updateSystemState(
+  saveId: number,
+  patch: (sys: SystemState, save: Save) => Partial<SystemState> | null
+): Promise<SystemState | null> {
+  return db.transaction("rw", [db.saves, db.systemStates], async () => {
+    const save = await db.saves.get(saveId);
+    if (!save) return null;
+    const sys = await getOrCreateSystemState(saveId);
+    const changes = patch(sys, save);
+    if (!changes) return sys;
+    await db.systemStates.update(sys.id!, changes);
+    return { ...sys, ...changes };
+  });
 }
 
 // 清理孤儿数据：删除「父记录已不存在」的子记录（历史遗留的垃圾）
@@ -260,25 +282,28 @@ async function cleanupOrphanData(): Promise<{ removed: number }> {
 
 // 快照当前游戏状态（用于存档点）
 async function snapshotCurrentState(saveId: number) {
-  const save = await db.saves.get(saveId);
-  const sys = await getOrCreateSystemState(saveId);
-  const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
-  const actions = await db.actions.where("saveId").equals(saveId).toArray();
-  return {
-    chapterIndex: save?.lastChapterIndex ?? 0,
-    offset: save?.offset ?? 0,
-    xp: sys.xp,
-    level: sys.level,
-    points: sys.points,
-    redeemed: sys.redeemed,
-    messages: sys.messages,
-    readChapters: sys.readChapters,
-    regrets: sys.regrets ?? [],
-    readingSeconds: sys.readingSeconds ?? 0,
-    quests: sys.quests ?? [],
-    npcMemories,
-    actions,
-  };
+  return db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions], async () => {
+    const save = await db.saves.get(saveId);
+    if (!save) throw new Error("Save no longer exists");
+    const sys = await getOrCreateSystemState(saveId);
+    const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
+    const actions = await db.actions.where("saveId").equals(saveId).toArray();
+    return {
+      chapterIndex: save?.lastChapterIndex ?? 0,
+      offset: save?.offset ?? 0,
+      xp: sys.xp,
+      level: sys.level,
+      points: sys.points,
+      redeemed: sys.redeemed,
+      messages: sys.messages,
+      readChapters: sys.readChapters,
+      regrets: sys.regrets ?? [],
+      readingSeconds: sys.readingSeconds ?? 0,
+      quests: sys.quests ?? [],
+      npcMemories,
+      actions,
+    };
+  });
 }
 
 interface AppState {
@@ -985,125 +1010,153 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 兑换系统点数（本地规则，受偏移度约束）
   async redeem(itemId: string) {
-    const { currentSaveId, systemState, offset, shopItems } = get();
-    if (currentSaveId == null || !systemState) return;
+    const { currentSaveId, shopItems } = get();
+    if (currentSaveId == null) return;
 
     const item = shopItems.find((i) => i.id === itemId);
     if (!item) return;
 
-    // 偏移度 ≥0.8：系统拒绝兑换
-    if (offset >= 0.8) {
-      const sys = await getOrCreateSystemState(currentSaveId);
-      const messages = [...sys.messages, "⚠️ 世界已严重排斥，系统拒绝兑换"].slice(-20);
-      await db.systemStates.update(sys.id!, { messages });
-      set({ systemState: { ...sys, messages } });
-      return;
-    }
+    const updated = await updateSystemState(currentSaveId, (systemState, save) => {
+      // 偏移度 ≥0.8：系统拒绝兑换（在事务内读最新偏移度与余额）
+      if (save.offset >= 0.8) {
+        const sys = systemState;
+        const messages = [...sys.messages, "⚠️ 世界已严重排斥，系统拒绝兑换"].slice(-20);
+        return { messages };
+      }
 
-    if (systemState.points < item.cost) return; // 点数不足
+      if (systemState.points < item.cost) return null; // 点数不足
 
-    const points = systemState.points - item.cost;
-    const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now() }];
-    const messages = [...systemState.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
+      const points = systemState.points - item.cost;
+      const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now() }];
+      const messages = [...systemState.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
 
-    await db.systemStates.update(systemState.id!, { points, redeemed, messages });
-    set({ systemState: { ...systemState, points, redeemed, messages } });
+      return { points, redeemed, messages };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   // 意难平清单：最多 3 条
   async addRegret(text: string) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const t = text.trim();
-    if (!t || (systemState.regrets?.length ?? 0) >= 3) return;
-    const regrets = [...(systemState.regrets ?? []), t];
-    await db.systemStates.update(systemState.id!, { regrets });
-    set({ systemState: { ...systemState, regrets } });
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      const t = text.trim();
+      if (!t || (systemState.regrets?.length ?? 0) >= 3) return null;
+      const regrets = [...(systemState.regrets ?? []), t];
+      return { regrets };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async removeRegret(index: number) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const regrets = [...(systemState.regrets ?? [])];
-    regrets.splice(index, 1);
-    await db.systemStates.update(systemState.id!, { regrets });
-    set({ systemState: { ...systemState, regrets } });
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    if (!Number.isInteger(index) || index < 0) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      if (index >= (systemState.regrets?.length ?? 0)) return null;
+      const regrets = [...(systemState.regrets ?? [])];
+      regrets.splice(index, 1);
+      return { regrets };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async addReadingSeconds(n: number) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const readingSeconds = (systemState.readingSeconds ?? 0) + n;
-    await db.systemStates.update(systemState.id!, { readingSeconds });
-    set({ systemState: { ...systemState, readingSeconds } });
+    if (!Number.isFinite(n) || n <= 0) return;
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      const readingSeconds = (systemState.readingSeconds ?? 0) + n;
+      return { readingSeconds };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async addHighlight(text: string) {
     const { currentSaveId, currentChapterIndex, selection } = get();
     if (currentSaveId == null || !text.trim() || selection == null) return;
-    await db.highlights.add({
-      saveId: currentSaveId,
-      chapterIndex: currentChapterIndex,
-      paraIndex: selection.paraIndex,
-      text: text.trim(),
-      createdAt: Date.now(),
+    const highlights = await db.transaction("rw", [db.saves, db.highlights], async () => {
+      if (!await db.saves.get(currentSaveId)) return [];
+      await db.highlights.add({
+        saveId: currentSaveId,
+        chapterIndex: currentChapterIndex,
+        paraIndex: selection.paraIndex,
+        text: text.trim(),
+        createdAt: Date.now(),
+      });
+      return await db.highlights.where("saveId").equals(currentSaveId).toArray();
     });
-    const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
-    set({ highlights });
+    if (get().currentSaveId === currentSaveId) set({ highlights });
   },
 
   async removeHighlight(id: number) {
-    await db.highlights.delete(id);
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    const highlights = await db.highlights.where("saveId").equals(currentSaveId).toArray();
-    set({ highlights });
+    const highlights = await db.transaction("rw", db.highlights, async () => {
+      const highlight = await db.highlights.get(id);
+      if (highlight?.saveId === currentSaveId) await db.highlights.delete(id);
+      return db.highlights.where("saveId").equals(currentSaveId).toArray();
+    });
+    if (get().currentSaveId === currentSaveId) set({ highlights });
   },
 
   async toggleBookmark() {
-    const { currentSaveId, currentChapterIndex, bookmarks } = get();
+    const { currentSaveId, currentChapterIndex } = get();
     if (currentSaveId == null) return;
-    const existing = bookmarks.find((b) => b.chapterIndex === currentChapterIndex);
-    if (existing) {
-      await db.bookmarks.delete(existing.id!);
-    } else {
-      await db.bookmarks.add({
-        saveId: currentSaveId,
-        chapterIndex: currentChapterIndex,
-        createdAt: Date.now(),
-      });
-    }
-    const updated = await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
-    set({ bookmarks: updated });
+    const updated = await db.transaction("rw", [db.saves, db.bookmarks], async () => {
+      if (!await db.saves.get(currentSaveId)) return [];
+      const existing = await db.bookmarks.where("saveId").equals(currentSaveId).and((b) => b.chapterIndex === currentChapterIndex).first();
+      if (existing) {
+        await db.bookmarks.delete(existing.id!);
+      } else {
+        await db.bookmarks.add({
+          saveId: currentSaveId,
+          chapterIndex: currentChapterIndex,
+          createdAt: Date.now(),
+        });
+      }
+      return await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
+    });
+    if (get().currentSaveId === currentSaveId) set({ bookmarks: updated });
   },
 
   async addQuest(text: string) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const t = text.trim();
-    if (!t) return;
-    const quests = [...(systemState.quests ?? []), { text: t, done: false }];
-    await db.systemStates.update(systemState.id!, { quests });
-    set({ systemState: { ...systemState, quests } });
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      const t = text.trim();
+      if (!t) return null;
+      const quests = [...(systemState.quests ?? []), { text: t, done: false }];
+      return { quests };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async toggleQuest(index: number) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const quests = (systemState.quests ?? []).map((q, i) =>
-      i === index ? { ...q, done: !q.done } : q
-    );
-    await db.systemStates.update(systemState.id!, { quests });
-    set({ systemState: { ...systemState, quests } });
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    if (!Number.isInteger(index) || index < 0) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      if (index >= (systemState.quests?.length ?? 0)) return null;
+      const quests = (systemState.quests ?? []).map((q, i) =>
+        i === index ? { ...q, done: !q.done } : q
+      );
+      return { quests };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async removeQuest(index: number) {
-    const { currentSaveId, systemState } = get();
-    if (currentSaveId == null || !systemState) return;
-    const quests = [...(systemState.quests ?? [])];
-    quests.splice(index, 1);
-    await db.systemStates.update(systemState.id!, { quests });
-    set({ systemState: { ...systemState, quests } });
+    const { currentSaveId } = get();
+    if (currentSaveId == null) return;
+    if (!Number.isInteger(index) || index < 0) return;
+    const updated = await updateSystemState(currentSaveId, (systemState) => {
+      if (index >= (systemState.quests?.length ?? 0)) return null;
+      const quests = [...(systemState.quests ?? [])];
+      quests.splice(index, 1);
+      return { quests };
+    });
+    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
   },
 
   async refreshSavePoints() {
@@ -1114,19 +1167,21 @@ export const useStore = create<AppState>((set, get) => ({
     }
     const savePoints = await db.savePoints.where("saveId").equals(currentSaveId).toArray();
     savePoints.sort((a, b) => b.createdAt - a.createdAt);
-    set({ savePoints });
+    if (get().currentSaveId === currentSaveId) set({ savePoints });
   },
 
   async createSavePoint(name: string) {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    const snap = await snapshotCurrentState(currentSaveId);
-    await db.savePoints.add({
-      saveId: currentSaveId,
-      name,
-      isAuto: false,
-      createdAt: Date.now(),
-      ...snap,
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints], async () => {
+      const snap = await snapshotCurrentState(currentSaveId);
+      await db.savePoints.add({
+        saveId: currentSaveId,
+        name,
+        isAuto: false,
+        createdAt: Date.now(),
+        ...snap,
+      });
     });
     await get().refreshSavePoints();
   },
@@ -1135,78 +1190,85 @@ export const useStore = create<AppState>((set, get) => ({
   async autoSavePoint() {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    const snap = await snapshotCurrentState(currentSaveId);
-    await db.savePoints.add({
-      saveId: currentSaveId,
-      name: "自动存档",
-      isAuto: true,
-      createdAt: Date.now(),
-      ...snap,
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints], async () => {
+      const snap = await snapshotCurrentState(currentSaveId);
+      await db.savePoints.add({
+        saveId: currentSaveId,
+        name: "自动存档",
+        isAuto: true,
+        createdAt: Date.now(),
+        ...snap,
+      });
+      const autos = await db.savePoints
+        .where("saveId")
+        .equals(currentSaveId)
+        .and((p) => p.isAuto)
+        .sortBy("createdAt");
+      while (autos.length > 3) {
+        const oldest = autos.shift();
+        if (oldest) await db.savePoints.delete(oldest.id!);
+      }
     });
-    const autos = await db.savePoints
-      .where("saveId")
-      .equals(currentSaveId)
-      .and((p) => p.isAuto)
-      .sortBy("createdAt");
-    while (autos.length > 3) {
-      const oldest = autos.shift();
-      if (oldest) await db.savePoints.delete(oldest.id!);
-    }
     await get().refreshSavePoints();
   },
 
   async restoreSavePoint(id: number) {
-    const sp = await db.savePoints.get(id);
-    if (!sp) return;
+    const originalSaveId = get().currentSaveId;
+    const restoredSaveId = await db.transaction("rw", [db.savePoints, db.saves, db.systemStates, db.npcMemories, db.actions], async () => {
+      const sp = await db.savePoints.get(id);
+      if (!sp || !await db.saves.get(sp.saveId)) return;
 
-    await db.saves.update(sp.saveId, {
-      lastChapterIndex: sp.chapterIndex,
-      offset: sp.offset,
+      await db.saves.update(sp.saveId, {
+        lastChapterIndex: sp.chapterIndex,
+        offset: sp.offset,
+      });
+      const sys = await getOrCreateSystemState(sp.saveId);
+      await db.systemStates.update(sys.id!, {
+        xp: sp.xp,
+        level: sp.level,
+        points: sp.points,
+        redeemed: sp.redeemed,
+        messages: sp.messages,
+        readChapters: sp.readChapters,
+        regrets: sp.regrets ?? [],
+        readingSeconds: sp.readingSeconds ?? 0,
+        quests: sp.quests ?? [],
+      });
+      await db.npcMemories.where("saveId").equals(sp.saveId).delete();
+      if (sp.npcMemories.length) {
+        await db.npcMemories.bulkAdd(
+          sp.npcMemories.map((m) => ({
+            saveId: sp.saveId,
+            npcName: m.npcName,
+            attitude: m.attitude,
+            trust: m.trust,
+            remembered: m.remembered,
+            tendency: m.tendency,
+            relationHistory: m.relationHistory,
+          }))
+        );
+      }
+      await db.actions.where("saveId").equals(sp.saveId).delete();
+      if (sp.actions.length) {
+        await db.actions.bulkAdd(
+          sp.actions.map((a) => ({
+            saveId: sp.saveId,
+            chapterIndex: a.chapterIndex,
+            kind: a.kind,
+            content: a.content,
+            result: a.result,
+            createdAt: a.createdAt,
+            paraIndex: a.paraIndex,
+            ...(a.cost != null
+              ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
+              : {}),
+          }))
+        );
+      }
+      return sp.saveId;
     });
-    const sys = await getOrCreateSystemState(sp.saveId);
-    await db.systemStates.update(sys.id!, {
-      xp: sp.xp,
-      level: sp.level,
-      points: sp.points,
-      redeemed: sp.redeemed,
-      messages: sp.messages,
-      readChapters: sp.readChapters,
-      regrets: sp.regrets ?? [],
-      readingSeconds: sp.readingSeconds ?? 0,
-      quests: sp.quests ?? [],
-    });
-    await db.npcMemories.where("saveId").equals(sp.saveId).delete();
-    if (sp.npcMemories.length) {
-      await db.npcMemories.bulkAdd(
-        sp.npcMemories.map((m) => ({
-          saveId: sp.saveId,
-          npcName: m.npcName,
-          attitude: m.attitude,
-          trust: m.trust,
-          remembered: m.remembered,
-          tendency: m.tendency,
-          relationHistory: m.relationHistory,
-        }))
-      );
-    }
-    await db.actions.where("saveId").equals(sp.saveId).delete();
-    if (sp.actions.length) {
-      await db.actions.bulkAdd(
-        sp.actions.map((a) => ({
-          saveId: sp.saveId,
-          chapterIndex: a.chapterIndex,
-          kind: a.kind,
-          content: a.content,
-          result: a.result,
-          createdAt: a.createdAt,
-          paraIndex: a.paraIndex,
-          ...(a.cost != null
-            ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
-            : {}),
-        }))
-      );
-    }
-    await get().switchSave(sp.saveId);
+    if (restoredSaveId == null || get().currentSaveId !== originalSaveId) return;
+    await get().switchSave(restoredSaveId);
     await get().refreshSavePoints();
   },
 

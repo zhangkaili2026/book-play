@@ -23,9 +23,11 @@ export async function callLLM(
     throw new Error("未配置 API Key");
   }
 
-  // 30 秒超时：网络半开 / AI 服务假死时不能卡死界面
+  // 超时：云端接口较快（30s）；本地 Ollama 在 CPU 上生成慢，给更长时间避免误判超时
+  const isLocal = /localhost|127\.0\.0\.1/.test(s.baseUrl);
+  const timeoutMs = isLocal ? 180_000 : 30_000;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${s.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
@@ -61,7 +63,11 @@ export async function callLLM(
     return { content, promptTokens, completionTokens, cost };
   } catch (e) {
     if (controller.signal.aborted) {
-      throw new Error("AI 请求超时（30 秒内未完成），请检查网络或 AI 服务是否正常");
+      throw new Error(
+        isLocal
+          ? "AI 请求超时（3 分钟内未完成），请检查 Ollama 是否卡住或响应过慢"
+          : "AI 请求超时（30 秒内未完成），请检查网络或 AI 服务是否正常"
+      );
     }
     throw e;
   } finally {

@@ -27,14 +27,16 @@ export const AI_STYLES: { id: string; desc: string }[] = [
 const SETTINGS_KEY = "bookplay.ai.settings";
 const USAGE_KEY = "bookplay.ai.usage";
 
+// 默认 AI 来源：本地 Ollama（免费、无需 Key）。注意：Ollama 只在本机 localhost 有效；
+// 部署到网上给他人用时，访客需自己在 ⚙️ 里切到 DeepSeek 或自定义（本机 Ollama 他们连不上）。
 export const DEFAULT_SETTINGS: AISettings = {
   apiKey: "",
-  baseUrl: "https://api.deepseek.com/v1",
-  model: "deepseek-chat",
+  baseUrl: "http://localhost:11434/v1",
+  model: "qwen2.5:7b",
   dailyBudget: 1,
   inputPricePerM: 1,
   outputPricePerM: 2,
-  provider: "custom",
+  provider: "ollama",
   aiStyle: "原著风",
 };
 

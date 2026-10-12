@@ -78,6 +78,7 @@ export default function Reader() {
   const [echoes, setEchoes] = useState<ActionRecord[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastScrollPosition = useRef(0);
 
   function scrollKey(index: number) {
     return `${currentSaveId ?? "book" + currentBookId}:${index}`;
@@ -86,10 +87,12 @@ export default function Reader() {
   // 滚动时记录位置（节流 150ms）
   function handleScroll() {
     const el = scrollRef.current;
-    if (!el || saveTimer.current) return;
+    if (!el) return;
+    lastScrollPosition.current = el.scrollTop;
+    if (saveTimer.current) return;
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
-      setScrollPos(scrollKey(currentChapterIndex), el.scrollTop);
+      setScrollPos(scrollKey(currentChapterIndex), lastScrollPosition.current);
     }, 150);
   }
 
@@ -163,12 +166,13 @@ export default function Reader() {
     if (!el) return;
     const key = `${currentSaveId ?? "book" + currentBookId}:${currentChapterIndex}`;
     el.scrollTop = getScrollPos(key);
+    lastScrollPosition.current = el.scrollTop;
     return () => {
       if (saveTimer.current) {
         clearTimeout(saveTimer.current);
         saveTimer.current = null;
       }
-      setScrollPos(key, el.scrollTop);
+      setScrollPos(key, lastScrollPosition.current);
     };
   }, [currentChapterIndex, currentSaveId, currentBookId]);
 

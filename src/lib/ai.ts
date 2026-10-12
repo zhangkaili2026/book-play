@@ -3,7 +3,7 @@
 // 浏览器直连；API Key 只留在本地，不上传任何服务器。
 // ============================================================
 
-import { loadSettings, addUsage, hasAIAccess } from "./settings";
+import { loadSettings, addUsage, hasAIAccess, isLocalAI } from "./settings";
 import type { BookTemplateItem } from "./db";
 
 export interface AIResult {
@@ -24,7 +24,7 @@ export async function callLLM(
   }
 
   // 超时：云端接口较快（30s）；本地 Ollama 在 CPU 上生成慢，给更长时间避免误判超时
-  const isLocal = /localhost|127\.0\.0\.1/.test(s.baseUrl);
+  const isLocal = isLocalAI(s.baseUrl);
   const timeoutMs = isLocal ? 180_000 : 30_000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -33,7 +33,7 @@ export async function callLLM(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {}),
+        ...(!isLocal && s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {}),
       },
       body: JSON.stringify({
         model: s.model,
@@ -56,7 +56,7 @@ export async function callLLM(
     }
     const promptTokens: number = data.usage?.prompt_tokens ?? 0;
     const completionTokens: number = data.usage?.completion_tokens ?? 0;
-    const cost =
+    const cost = isLocal ? 0 :
       (promptTokens * s.inputPricePerM + completionTokens * s.outputPricePerM) / 1_000_000;
 
     addUsage(promptTokens, completionTokens, cost);

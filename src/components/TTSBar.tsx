@@ -9,6 +9,9 @@ const TIMERS = [0, 15, 30, 60];
 // 听书栏：用浏览器 Web Speech API 朗读原文（免费，0 token）
 export default function TTSBar() {
   const currentContent = useStore((s) => s.currentContent);
+  const currentChapterIndex = useStore((s) => s.currentChapterIndex);
+  const currentBookId = useStore((s) => s.currentBookId);
+  const currentSaveId = useStore((s) => s.currentSaveId);
 
   const [active, setActive] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -47,7 +50,10 @@ export default function TTSBar() {
 
     if (index >= paras.length) {
       if (st.currentChapterIndex + 1 < st.chapterList.length) {
-        st.gotoChapter(st.currentChapterIndex + 1); // 触发 content 变化 → effect 重读新章
+        const generation = generationRef.current;
+        st.gotoChapter(st.currentChapterIndex + 1).catch(() => {
+          if (generation === generationRef.current) stop();
+        });
       } else {
         stop();
       }
@@ -119,7 +125,7 @@ export default function TTSBar() {
       speakPara(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentContent]);
+  }, [currentContent, currentChapterIndex, currentBookId, currentSaveId]);
 
   // 加载中文音色
   useEffect(() => {

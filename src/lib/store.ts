@@ -24,7 +24,7 @@ import {
   offsetDeltaFor,
   extractTargetName,
 } from "./actions";
-import { loadSettings, hasAIAccess, getUsage } from "./settings";
+import { loadSettings, hasAIAccess, getUsage, isLocalAI } from "./settings";
 import { callLLM, buildActionPrompt, generateBookTemplates } from "./ai";
 import { buildCacheKey, getCached, setCached, clearCache, getCacheCount } from "./cache";
 import { XP_RULES, DEFAULT_SHOP, getShopItems, XP_PER_LEVEL, POINTS_PER_LEVEL, type ShopItem } from "./system";
@@ -783,7 +783,7 @@ export const useStore = create<AppState>((set, get) => ({
             ? "AI 已关闭。点右上角 ⚙️，切换到「本地 Ollama」或「DeepSeek」即可重新启用。"
             : "这是复杂行动，需要 AI 判断。你还没配置 API Key —— 点右上角 ⚙️ 配置，或用本地 Ollama（免费）。";
         effective = false; // AI 没判定，这次行动不算真正生效
-      } else if (usage.todayCost >= settings.dailyBudget) {
+      } else if (!isLocalAI(settings.baseUrl) && usage.todayCost >= settings.dailyBudget) {
         result = "今日 AI 预算已用完，自动切回占位结果（本地，0 token）。";
         effective = false;
       } else {

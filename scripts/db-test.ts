@@ -1,0 +1,44 @@
+﻿import "fake-indexeddb/auto";
+import assert from "node:assert/strict";
+import { db } from "../src/lib/db";
+import { useStore } from "../src/lib/store";
+import { setCached } from "../src/lib/cache";
+import { isLocalAI } from "../src/lib/settings";
+
+async function main() {
+  assert.equal(isLocalAI("https://localhost.example.com/v1"), false);
+  assert.equal(isLocalAI("https://example.com/localhost"), false);
+  assert.equal(isLocalAI("http://[::1]:11434/v1"), true);
+  const bookId = await db.books.add({title:"test",author:"",totalChars:0,chapterCount:0,createdAt:0,lastReadIndex:0});
+  const saveId = await db.saves.add({bookId,name:"test",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
+  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[]});
+  await useStore.getState().switchSave(saveId);
+  const fields = {xp:120,level:2,points:5,redeemed:[{name:"old",at:1}],messages:["old"],readChapters:[0],regrets:["old"],readingSeconds:10,quests:[{text:"old",done:true}]};
+  const sys = (await db.systemStates.where("saveId").equals(saveId).first())!;
+  await db.systemStates.update(sys.id!, fields);
+  await useStore.getState().createSavePoint("test");
+  const sp = (await db.savePoints.toArray())[0];
+  for (const key of Object.keys(fields) as (keyof typeof fields)[]) assert.deepEqual(sp[key], fields[key]);
+  await Promise.all([useStore.getState().redeem("info-npc"),useStore.getState().redeem("info-npc")]);
+  const redeemed = (await db.systemStates.get(sys.id!))!;
+  assert.equal(redeemed.points,0);
+  assert.equal(redeemed.redeemed.length,2);
+  await Promise.all([useStore.getState().addReadingSeconds(10),useStore.getState().addReadingSeconds(20)]);
+  assert.equal((await db.systemStates.get(sys.id!))!.readingSeconds,40);
+  await useStore.getState().restoreSavePoint(sp.id!);
+  const restored = (await db.systemStates.get(sys.id!))!;
+  for (const key of Object.keys(fields) as (keyof typeof fields)[]) assert.deepEqual(restored[key], fields[key]);
+  await db.saves.update(saveId,{offset:0.5});
+  await db.savePoints.update(sp.id!,{actions:[{saveId,chapterIndex:0,kind:"simple",content:"x",result:"x",createdAt:0}]});
+  const fail = () => { throw new Error("injected write failure"); };
+  db.actions.hook("creating",fail);
+  await assert.rejects(useStore.getState().restoreSavePoint(sp.id!),/injected/);
+  db.actions.hook("creating").unsubscribe(fail);
+  assert.equal((await db.saves.get(saveId))!.offset,0.5);
+  for(let i=0;i<501;i++) await setCached(String(i),{content:"x",promptTokens:0,completionTokens:0,cost:0});
+  assert.equal(await db.aiCache.count(),500);
+  assert.equal(await db.aiCache.where("key").equals("0").count(),0);
+  console.log("DB tests passed: snapshot, restore, rollback, concurrent redeem/reading, cache eviction; URL boundaries");
+  await db.delete();
+}
+main().catch(error => {console.error(error);process.exitCode=1;});

@@ -74,9 +74,14 @@ export function saveSettings(s: AISettings): void {
 }
 
 // 是否指向本地 Ollama（免费，无需 Key）
-export function isLocalAI(): boolean {
-  const s = loadSettings();
-  return /localhost|127\.0\.0\.1/.test(s.baseUrl);
+export function isLocalAI(baseUrl = loadSettings().baseUrl): boolean {
+  try {
+    const url = new URL(baseUrl);
+    return ["http:", "https:"].includes(url.protocol)
+      && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
 }
 
 // 是否具备 AI 访问能力：有 Key，或指向本地 Ollama（无需 Key），且未被手动关闭

@@ -242,10 +242,23 @@ function buildRedeemResult(item: ShopItem, npcMemories: NpcMemory[]): string {
   if (item.category === "info") {
     return `你获知了与「${item.name}」相关的关键内情，将在后续剧情中发挥作用。`;
   }
-  if (item.category === "item") return `获得物品「${item.name}」：${item.desc}`;
-  if (item.category === "ability") return `习得能力「${item.name}」：${item.desc}`;
-  if (item.category === "power") return `势力提升「${item.name}」：${item.desc}`;
+  if (item.category === "item") return `已获得「${item.name}」：${item.desc}（已加入资源栏）`;
+  if (item.category === "ability") return `已习得「${item.name}」：${item.desc}（已加入能力栏）`;
+  if (item.category === "power") return `已获得势力「${item.name}」：${item.desc}（已加入资源栏）`;
   return `获得「${item.name}」：${item.desc}`;
+}
+
+// 兑换的机械效果：能力→abilities，道具/势力→resources，情报/特殊→不改角色数据
+function itemMechanicalPatch(item: ShopItem, pc: Character): Partial<Character> | null {
+  if (item.category === "ability") {
+    if (pc.abilities.includes(item.name)) return null; // 已有同名能力，不重复加
+    return { abilities: [...pc.abilities, item.name] };
+  }
+  if (item.category === "item" || item.category === "power") {
+    if (pc.resources.includes(item.name)) return null;
+    return { resources: [...pc.resources, item.name] };
+  }
+  return null;
 }
 
 // 清理孤儿数据：删除「父记录已不存在」的子记录（历史遗留的垃圾）
@@ -1032,30 +1045,49 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 兑换系统点数（本地规则，受偏移度约束）
   async redeem(itemId: string) {
-    const { currentSaveId, shopItems, npcMemories } = get();
-    if (currentSaveId == null) return;
+    const { currentSaveId, shopItems, npcMemories, currentPC } = get();
+    if (currentSaveId == null || !currentPC) return;
 
     const item = shopItems.find((i) => i.id === itemId);
     if (!item) return;
 
-    const updated = await updateSystemState(currentSaveId, (systemState, save) => {
+    // 一个事务原子完成：扣点数 + 记录兑换 + 把能力/道具写进角色数据
+    const updated = await db.transaction("rw", [db.saves, db.systemStates, db.characters], async () => {
+      const save = await db.saves.get(currentSaveId);
+      if (!save) return null;
+      const sys = await getOrCreateSystemState(currentSaveId);
+
       // 偏移度 ≥0.8：系统拒绝兑换（在事务内读最新偏移度与余额）
       if (save.offset >= 0.8) {
-        const sys = systemState;
         const messages = [...sys.messages, "⚠️ 世界已严重排斥，系统拒绝兑换"].slice(-20);
-        return { messages };
+        await db.systemStates.update(sys.id!, { messages });
+        return { ...sys, messages };
       }
 
-      if (systemState.points < item.cost) return null; // 点数不足
+      if (sys.points < item.cost) return null; // 点数不足
+
+      // 机械效果：能力/道具/势力真正作用到角色数据上（情报/特殊只揭示内容）
+      const pc = await db.characters.get(currentPC.id!);
+      if (pc) {
+        const patch = itemMechanicalPatch(item, pc);
+        if (patch) await db.characters.update(pc.id!, patch);
+      }
 
       const result = buildRedeemResult(item, npcMemories);
-      const points = systemState.points - item.cost;
-      const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now(), result }];
-      const messages = [...systemState.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
+      const points = sys.points - item.cost;
+      const redeemed = [...sys.redeemed, { name: item.name, at: Date.now(), result }];
+      const messages = [...sys.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
 
-      return { points, redeemed, messages };
+      await db.systemStates.update(sys.id!, { points, redeemed, messages });
+      return { ...sys, points, redeemed, messages };
     });
-    if (updated && get().currentSaveId === currentSaveId) set({ systemState: updated });
+
+    if (updated && get().currentSaveId === currentSaveId) {
+      set({ systemState: updated });
+      // 能力/资源变了，刷新 currentPC 让「能力 / 资源」栏实时更新
+      const pc = await db.characters.get(currentPC.id!);
+      if (pc && get().currentSaveId === currentSaveId) set({ currentPC: pc });
+    }
   },
 
   // 意难平清单：最多 3 条

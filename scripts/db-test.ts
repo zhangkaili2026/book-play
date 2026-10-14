@@ -79,12 +79,33 @@ async function backupRoundTrip() {
   console.log("Backup round-trip passed: every saved table, templates, foreign keys and unchanged original text");
 }
 
+// 验证商城兑换的机械效果：兑换能力后自动加入角色能力栏，并正确扣点数。
+async function redeemGrantsAbility() {
+  await db.delete();
+  await db.open();
+  const bookId = await db.books.add({title:"mech",author:"",totalChars:0,chapterCount:0,createdAt:0,lastReadIndex:0});
+  const saveId = await db.saves.add({bookId,name:"mech",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
+  const pcId = await db.characters.add({saveId,name:"hero",isPC:true,identity:"x",faction:"x",abilities:["read"],connections:[],power:"x",resources:[]});
+  await db.saves.update(saveId,{pcId});
+  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[]});
+  await useStore.getState().switchSave(saveId);
+  const sys = (await db.systemStates.where("saveId").equals(saveId).first())!;
+  await db.systemStates.update(sys.id!, {points:100});
+  await useStore.getState().redeem("ability-temp");
+  const pc = (await db.characters.get(pcId))!;
+  assert.ok(pc.abilities.includes("临时技能"), "兑换能力后应自动加入角色能力栏");
+  assert.equal((await db.systemStates.get(sys.id!))!.points, 80); // 100 - 20
+  console.log("Mechanical effect passed: ability redemption appends to PC abilities");
+}
+
 async function main() {
   assert.equal(isLocalAI("https://localhost.example.com/v1"), false);
   assert.equal(isLocalAI("https://example.com/localhost"), false);
   assert.equal(isLocalAI("http://[::1]:11434/v1"), true);
   const bookId = await db.books.add({title:"test",author:"",totalChars:0,chapterCount:0,createdAt:0,lastReadIndex:0});
   const saveId = await db.saves.add({bookId,name:"test",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
+  const pcId = await db.characters.add({saveId,name:"hero",isPC:true,identity:"scholar",faction:"academy",abilities:["read"],connections:[],power:"library",resources:[]});
+  await db.saves.update(saveId,{pcId});
   useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[]});
   await useStore.getState().switchSave(saveId);
   const fields = {xp:120,level:2,points:5,redeemed:[{name:"old",at:1}],messages:["old"],readChapters:[0],regrets:["old"],readingSeconds:10,quests:[{text:"old",done:true}]};
@@ -116,6 +137,7 @@ async function main() {
   assert.equal(await db.aiCache.where("key").equals("0").count(),0);
   console.log("DB tests passed: snapshot, restore, rollback, concurrent redeem/reading, cache eviction; URL boundaries");
   await backupRoundTrip();
+  await redeemGrantsAbility();
   await db.delete();
 }
 main().catch(error => {console.error(error);process.exitCode=1;});

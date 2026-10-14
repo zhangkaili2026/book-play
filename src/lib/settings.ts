@@ -1,3 +1,6 @@
+export type FontChoice = "serif" | "sans" | "kai";
+export type ReadingBgChoice = "paper" | "white" | "green" | "dark";
+const READING_PREFS_KEY = "bookplay.readingPrefs";
 // ============================================================
 // 应用级配置 + 用量统计（存 localStorage，本地，不上传）
 // API Key 由用户自己填写，存在自己浏览器里。
@@ -271,4 +274,46 @@ export function setReadingGoalMinutes(n: number): void {
   } catch {
     /* ignore */
   }
+}
+
+export function loadReadingPrefs(): {
+  fontSize: number;
+  lineHeight: number;
+  fontFamily: FontChoice;
+  readingBg: ReadingBgChoice;
+} {
+  const defaults = {
+    fontSize: 18,
+    lineHeight: 1.8,
+    fontFamily: "serif" as FontChoice,
+    readingBg: "paper" as ReadingBgChoice,
+  };
+  try {
+    const raw = localStorage.getItem(READING_PREFS_KEY);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
+  } catch {
+    /* ignore */
+  }
+  return defaults;
+}
+
+export function saveReadingPrefs(patch: Partial<ReturnType<typeof loadReadingPrefs>>): void {
+  try {
+    localStorage.setItem(READING_PREFS_KEY, JSON.stringify({ ...loadReadingPrefs(), ...patch }));
+  } catch {
+    /* ignore */
+  }
+}
+export function recordBackup(): void {
+  try { localStorage.setItem("bookplay.lastBackupAt", String(Date.now())); } catch { /* storage unavailable */ }
+}
+
+export function shouldRemindBackup(): boolean {
+  try {
+    const now = Date.now();
+    const dismissed = Number(localStorage.getItem("bookplay.backupRemindDismissedAt"));
+    if (dismissed > 0 && now - dismissed < 24 * 60 * 60 * 1000) return false;
+    const lastBackup = Number(localStorage.getItem("bookplay.lastBackupAt"));
+    return !Number.isFinite(lastBackup) || lastBackup <= 0 || now - lastBackup > 7 * 24 * 60 * 60 * 1000;
+  } catch { return true; }
 }

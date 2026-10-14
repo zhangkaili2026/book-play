@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import PwaRegister from "@/components/PwaRegister";
+import BackupReminder from "@/components/BackupReminder";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body>
         {children}
         <PwaRegister />
+        <BackupReminder />
       </body>
     </html>
   );

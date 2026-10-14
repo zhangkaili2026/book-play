@@ -2,8 +2,9 @@
 import assert from "node:assert/strict";
 import { db } from "../src/lib/db";
 import { useStore } from "../src/lib/store";
+import { itemMechanicalPatch, buildRedeemResult, SHOP_BY_TYPE } from "../src/lib/system";
 import { setCached } from "../src/lib/cache";
-import { isLocalAI } from "../src/lib/settings";
+import { isLocalAI, recordBackup, shouldRemindBackup } from "../src/lib/settings";
 import { buildSaveBackup, importSaveBackup } from "../src/lib/export";
 
 async function backupRoundTrip() {
@@ -103,6 +104,31 @@ async function redeemGrantsAbility() {
 }
 
 async function main() {
+  const memory = new Map<string,string>();
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis,"localStorage");
+  Object.defineProperty(globalThis,"localStorage",{configurable:true,value:{getItem:(key:string)=>memory.get(key) ?? null,setItem:(key:string,value:string)=>memory.set(key,value)}});
+  try {
+    assert.equal(shouldRemindBackup(),true);
+    recordBackup();
+    assert.equal(shouldRemindBackup(),false);
+    memory.set("bookplay.lastBackupAt",String(Date.now()-8*86400000));
+    assert.equal(shouldRemindBackup(),true);
+    memory.set("bookplay.backupRemindDismissedAt",String(Date.now()));
+    assert.equal(shouldRemindBackup(),false);
+    memory.set("bookplay.backupRemindDismissedAt",String(Date.now()-25*3600000));
+    assert.equal(shouldRemindBackup(),true);
+  } finally {
+    if(originalStorage) Object.defineProperty(globalThis,"localStorage",originalStorage);
+    else Reflect.deleteProperty(globalThis,"localStorage");
+  }
+  const pc = {saveId:1,name:"test",isPC:true,identity:"",faction:"",abilities:[],connections:[],power:"",resources:[]};
+  for (const items of Object.values(SHOP_BY_TYPE)) {
+    for (const item of items.filter(i=>i.category === "power")) {
+      const target = item.target ?? "connections";
+      assert.deepEqual(itemMechanicalPatch(item,pc),{[target]:[item.name]});
+      assert.ok(buildRedeemResult(item,[]).includes(target === "connections" ? "人脉栏" : "资源栏"));
+    }
+  }
   assert.equal(isLocalAI("https://localhost.example.com/v1"), false);
   assert.equal(isLocalAI("https://example.com/localhost"), false);
   assert.equal(isLocalAI("http://[::1]:11434/v1"), true);

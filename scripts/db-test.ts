@@ -97,6 +97,8 @@ async function main() {
   const redeemed = (await db.systemStates.get(sys.id!))!;
   assert.equal(redeemed.points,0);
   assert.equal(redeemed.redeemed.length,2);
+  const npcIntel = redeemed.redeemed.find((r) => r.name === "NPC 情报");
+  assert.ok(npcIntel && npcIntel.result && npcIntel.result.length > 0, "兑换后应产生具体情报内容");
   await Promise.all([useStore.getState().addReadingSeconds(10),useStore.getState().addReadingSeconds(20)]);
   assert.equal((await db.systemStates.get(sys.id!))!.readingSeconds,40);
   await useStore.getState().restoreSavePoint(sp.id!);

@@ -226,6 +226,28 @@ async function updateSystemState(
   });
 }
 
+// 生成兑换后的「实际结果」文案：情报类揭示真实内容，其余给出具体收获。
+function buildRedeemResult(item: ShopItem, npcMemories: NpcMemory[]): string {
+  if (item.id === "info-npc") {
+    if (npcMemories.length === 0) {
+      return "你还没有结识任何角色。先做几次「结交 / 试探」行动，情报才有内容。";
+    }
+    return (
+      "已识别角色的态度与信任：" +
+      npcMemories
+        .map((m) => `${m.npcName}（${m.attitude}，信任 ${Math.round(m.trust * 100)}%）`)
+        .join("；")
+    );
+  }
+  if (item.category === "info") {
+    return `你获知了与「${item.name}」相关的关键内情，将在后续剧情中发挥作用。`;
+  }
+  if (item.category === "item") return `获得物品「${item.name}」：${item.desc}`;
+  if (item.category === "ability") return `习得能力「${item.name}」：${item.desc}`;
+  if (item.category === "power") return `势力提升「${item.name}」：${item.desc}`;
+  return `获得「${item.name}」：${item.desc}`;
+}
+
 // 清理孤儿数据：删除「父记录已不存在」的子记录（历史遗留的垃圾）
 async function cleanupOrphanData(): Promise<{ removed: number }> {
   const saves = await db.saves.toArray();
@@ -1010,7 +1032,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 兑换系统点数（本地规则，受偏移度约束）
   async redeem(itemId: string) {
-    const { currentSaveId, shopItems } = get();
+    const { currentSaveId, shopItems, npcMemories } = get();
     if (currentSaveId == null) return;
 
     const item = shopItems.find((i) => i.id === itemId);
@@ -1026,8 +1048,9 @@ export const useStore = create<AppState>((set, get) => ({
 
       if (systemState.points < item.cost) return null; // 点数不足
 
+      const result = buildRedeemResult(item, npcMemories);
       const points = systemState.points - item.cost;
-      const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now() }];
+      const redeemed = [...systemState.redeemed, { name: item.name, at: Date.now(), result }];
       const messages = [...systemState.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
 
       return { points, redeemed, messages };

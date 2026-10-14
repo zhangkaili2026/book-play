@@ -496,6 +496,26 @@ export default function CharacterPanel({
               })}
             </div>
 
+            {/* 我的收获（已兑换，含具体结果） */}
+            {(systemState?.redeemed ?? []).length > 0 && (
+              <div className="mb-3">
+                <div className="mb-1 font-medium text-gray-700 dark:text-gray-300">
+                  我的收获（{(systemState?.redeemed ?? []).length}）
+                </div>
+                <div className="space-y-1">
+                  {[...(systemState?.redeemed ?? [])].reverse().map((r, i) => (
+                    <div key={i} className="rounded border border-gray-200 p-2 text-xs dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-800 dark:text-gray-200">{r.name}</span>
+                        <span className="text-gray-400 dark:text-gray-500">{new Date(r.at).toLocaleString()}</span>
+                      </div>
+                      <div className="mt-1 text-gray-600 dark:text-gray-400">{r.result ?? "（历史记录，无详情）"}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 系统提示 */}
             <div>
               <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">系统提示</div>

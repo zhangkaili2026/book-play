@@ -131,7 +131,7 @@ export interface SystemState {
   xp: number;              // 经验值
   level: number;           // 等级
   points: number;          // 系统点数
-  redeemed: { name: string; at: number }[]; // 兑换记录
+  redeemed: { name: string; at: number; result?: string }[]; // 兑换记录（result = 兑换后实际获得的内容/情报）
   messages: string[];      // 系统提示（最近几条）
   readChapters: number[];  // 已读章节（用于"读新章节"经验判定）
   regrets: string[];       // 意难平清单（玩家最想改变的事，最多 3 条）
@@ -169,7 +169,7 @@ export interface SavePoint {
   xp: number;
   level: number;
   points: number;
-  redeemed: { name: string; at: number }[];
+  redeemed: { name: string; at: number; result?: string }[];
   messages: string[];
   readChapters: number[];
   regrets: string[];          // 意难平清单快照

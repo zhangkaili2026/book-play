@@ -58,6 +58,8 @@ export default function CharacterPanel({
   const redeemedNames = new Set((systemState?.redeemed ?? []).map((r) => r.name));
   // 有可兑换项（且未兑换）→ 系统 tab 亮小红点
   const hasAffordable = shopItems.some((i) => points >= i.cost && !redeemedNames.has(i.name));
+  // 未过期的临时能力
+  const activeTempAbilities = (systemState?.tempAbilities ?? []).filter((t) => t.expiresAtChapter > currentChapterIndex);
 
   return (
     <div className="fixed inset-0 z-30 flex flex-col border-l border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900 md:static md:h-full md:w-80 md:shrink-0">
@@ -158,6 +160,19 @@ export default function CharacterPanel({
         {tab === "abilities" && (
           <div className="space-y-4">
             <Section title="固有技能" items={currentPC.abilities} />
+            {activeTempAbilities.length > 0 && (
+              <div>
+                <div className="mb-1 font-medium text-gray-700 dark:text-gray-300">临时能力</div>
+                <ul className="space-y-1 text-gray-600 dark:text-gray-400">
+                  {activeTempAbilities.map((t, i) => (
+                    <li key={i} className="flex items-center justify-between">
+                      <span>· {t.name}</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400">还剩 {t.expiresAtChapter - currentChapterIndex} 章</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <Section title="人脉" items={currentPC.connections} />
             <Section title="资源" items={currentPC.resources} />
             <p className="text-xs text-gray-400 dark:text-gray-500">

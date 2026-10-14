@@ -137,6 +137,7 @@ export interface SystemState {
   regrets: string[];       // 意难平清单（玩家最想改变的事，最多 3 条）
   readingSeconds: number;  // 累计阅读时长（秒）
   quests: { text: string; done: boolean }[]; // 支线任务板
+  tempAbilities: { name: string; expiresAtChapter: number }[]; // 临时能力（到该章后失效）
 }
 
 // —— 划线批注（选中原文划线，私人笔记，不影响剧情）——
@@ -175,6 +176,7 @@ export interface SavePoint {
   regrets: string[];          // 意难平清单快照
   readingSeconds: number;     // 阅读时长快照
   quests: { text: string; done: boolean }[]; // 支线任务板快照
+  tempAbilities: { name: string; expiresAtChapter: number }[];
   npcMemories: NpcMemory[];   // NPC 记忆副本
   actions: ActionRecord[];    // 行动记录副本
 }

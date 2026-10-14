@@ -19,7 +19,7 @@ async function backupRoundTrip() {
     {saveId,chapterIndex:0,kind:"complex",content:"act",result:"result",createdAt:3,paraIndex:1,cost:0,promptTokens:12,completionTokens:34,cached:true},
     {saveId,chapterIndex:0,kind:"simple",content:"look",result:"seen",createdAt:4,paraIndex:0},
   ]);
-  await db.systemStates.add({saveId,xp:120,level:2,points:17,redeemed:[{name:"item",at:5}],messages:["message"],readChapters:[0],regrets:["regret"],readingSeconds:123,quests:[{text:"quest",done:true}]});
+  await db.systemStates.add({saveId,xp:120,level:2,points:17,redeemed:[{name:"item",at:5}],messages:["message"],readChapters:[0],regrets:["regret"],readingSeconds:123,quests:[{text:"quest",done:true}],tempAbilities:[{name:"临时技能",expiresAtChapter:5}]});
   await db.highlights.add({saveId,chapterIndex:0,paraIndex:1,text:"note",createdAt:6});
   await db.bookmarks.add({saveId,chapterIndex:0,createdAt:7});
   useStore.setState({currentSaveId:saveId,currentBookId:bookId,chapterList:[]});
@@ -92,10 +92,14 @@ async function redeemGrantsAbility() {
   const sys = (await db.systemStates.where("saveId").equals(saveId).first())!;
   await db.systemStates.update(sys.id!, {points:100});
   await useStore.getState().redeem("ability-temp");
+  const sys2 = (await db.systemStates.get(sys.id!))!;
+  assert.equal(sys2.points, 80); // 100 - 20
+  assert.equal(sys2.tempAbilities.length, 1);
+  assert.equal(sys2.tempAbilities[0].name, "临时技能");
+  assert.equal(sys2.tempAbilities[0].expiresAtChapter, 5); // 第 0 章 + 5
   const pc = (await db.characters.get(pcId))!;
-  assert.ok(pc.abilities.includes("临时技能"), "兑换能力后应自动加入角色能力栏");
-  assert.equal((await db.systemStates.get(sys.id!))!.points, 80); // 100 - 20
-  console.log("Mechanical effect passed: ability redemption appends to PC abilities");
+  assert.ok(!pc.abilities.includes("临时技能"), "临时技能不应进永久能力栏");
+  console.log("Mechanical effect passed: temporary ability stored with expiry, not in permanent abilities");
 }
 
 async function main() {

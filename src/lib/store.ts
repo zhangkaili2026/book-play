@@ -155,6 +155,7 @@ async function getOrCreateSystemState(saveId: number): Promise<SystemState> {
         regrets: [],
         readingSeconds: 0,
         quests: [],
+        tempAbilities: [],
       });
       sys = (await db.systemStates.get(id))!;
     }
@@ -243,7 +244,11 @@ function buildRedeemResult(item: ShopItem, npcMemories: NpcMemory[]): string {
     return `你获知了与「${item.name}」相关的关键内情，将在后续剧情中发挥作用。`;
   }
   if (item.category === "item") return `已获得「${item.name}」：${item.desc}（已加入资源栏）`;
-  if (item.category === "ability") return `已习得「${item.name}」：${item.desc}（已加入能力栏）`;
+  if (item.category === "ability") {
+    return item.temporary
+      ? `已获得临时能力「${item.name}」（5 章内有效，到期自动失效）`
+      : `已习得「${item.name}」：${item.desc}（已加入能力栏）`;
+  }
   if (item.category === "power") return `已获得势力「${item.name}」：${item.desc}（已加入资源栏）`;
   return `获得「${item.name}」：${item.desc}`;
 }
@@ -335,6 +340,7 @@ async function snapshotCurrentState(saveId: number) {
       regrets: sys.regrets ?? [],
       readingSeconds: sys.readingSeconds ?? 0,
       quests: sys.quests ?? [],
+      tempAbilities: sys.tempAbilities ?? [],
       npcMemories,
       actions,
     };
@@ -1045,7 +1051,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   // 兑换系统点数（本地规则，受偏移度约束）
   async redeem(itemId: string) {
-    const { currentSaveId, shopItems, npcMemories, currentPC } = get();
+    const { currentSaveId, shopItems, npcMemories, currentPC, currentChapterIndex } = get();
     if (currentSaveId == null || !currentPC) return;
 
     const item = shopItems.find((i) => i.id === itemId);
@@ -1066,11 +1072,19 @@ export const useStore = create<AppState>((set, get) => ({
 
       if (sys.points < item.cost) return null; // 点数不足
 
-      // 机械效果：能力/道具/势力真正作用到角色数据上（情报/特殊只揭示内容）
-      const pc = await db.characters.get(currentPC.id!);
-      if (pc) {
-        const patch = itemMechanicalPatch(item, pc);
-        if (patch) await db.characters.update(pc.id!, patch);
+      // 临时能力：记录过期章节（到期自动失效）；永久能力/道具/势力写进角色数据
+      let tempAbilities = sys.tempAbilities ?? [];
+      if (item.temporary) {
+        tempAbilities = [
+          ...tempAbilities.filter((t) => t.expiresAtChapter > currentChapterIndex),
+          { name: item.name, expiresAtChapter: currentChapterIndex + 5 },
+        ];
+      } else {
+        const pc = await db.characters.get(currentPC.id!);
+        if (pc) {
+          const patch = itemMechanicalPatch(item, pc);
+          if (patch) await db.characters.update(pc.id!, patch);
+        }
       }
 
       const result = buildRedeemResult(item, npcMemories);
@@ -1078,8 +1092,8 @@ export const useStore = create<AppState>((set, get) => ({
       const redeemed = [...sys.redeemed, { name: item.name, at: Date.now(), result }];
       const messages = [...sys.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
 
-      await db.systemStates.update(sys.id!, { points, redeemed, messages });
-      return { ...sys, points, redeemed, messages };
+      await db.systemStates.update(sys.id!, { points, redeemed, messages, tempAbilities });
+      return { ...sys, points, redeemed, messages, tempAbilities };
     });
 
     if (updated && get().currentSaveId === currentSaveId) {
@@ -1288,6 +1302,7 @@ export const useStore = create<AppState>((set, get) => ({
         regrets: sp.regrets ?? [],
         readingSeconds: sp.readingSeconds ?? 0,
         quests: sp.quests ?? [],
+        tempAbilities: sp.tempAbilities ?? [],
       });
       await db.npcMemories.where("saveId").equals(sp.saveId).delete();
       if (sp.npcMemories.length) {

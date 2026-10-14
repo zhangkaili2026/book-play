@@ -23,6 +23,7 @@ export interface ShopItem {
   cost: number;
   category: RedeemCategory;
   tier: ShopTier;
+  temporary?: boolean; // 临时物品（如「临时技能」5 章后过期）
 }
 
 export const CATEGORY_LABEL: Record<RedeemCategory, string> = {
@@ -39,7 +40,7 @@ export const TIER_ORDER: ShopTier[] = ["初级", "中级", "高级", "顶级"];
 export const DEFAULT_SHOP: ShopItem[] = [
   { id: "info-npc", name: "NPC 情报", desc: "查看一个关键角色的态度与信任度", cost: 5, category: "info", tier: "初级" },
   { id: "item-resource", name: "补充资源", desc: "获得一批可支配资源", cost: 10, category: "item", tier: "初级" },
-  { id: "ability-temp", name: "临时技能", desc: "临时获得一项能力（5 章内有效）", cost: 20, category: "ability", tier: "中级" },
+  { id: "ability-temp", name: "临时技能", desc: "临时获得一项能力（5 章内有效）", cost: 20, category: "ability", tier: "中级", temporary: true },
   { id: "power-buff", name: "势力加成", desc: "势力小幅度提升", cost: 40, category: "power", tier: "中级" },
   { id: "info-key", name: "关键情报", desc: "得知一条影响主线走向的关键消息", cost: 80, category: "info", tier: "高级" },
   { id: "special-fate", name: "命运转折", desc: "获得一次改变某个关键事件的机会", cost: 200, category: "special", tier: "顶级" },

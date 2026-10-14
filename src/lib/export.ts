@@ -122,6 +122,7 @@ export interface SaveBackup {
     regrets: string[];
     readingSeconds: number;
     quests: { text: string; done: boolean }[];
+    tempAbilities: { name: string; expiresAtChapter: number }[];
   };
   savePoints?: SavePoint[];
 }
@@ -158,6 +159,7 @@ export function buildSaveBackup(ctx: {
       regrets: ctx.systemState.regrets,
       readingSeconds: ctx.systemState.readingSeconds,
       quests: ctx.systemState.quests,
+      tempAbilities: ctx.systemState.tempAbilities ?? [],
     },
     savePoints: ctx.savePoints,
   };
@@ -275,6 +277,7 @@ export async function importSaveBackup(json: string): Promise<string> {
         regrets: data.systemState.regrets ?? [],
         readingSeconds: data.systemState.readingSeconds ?? 0,
         quests: data.systemState.quests ?? [],
+        tempAbilities: data.systemState.tempAbilities ?? [],
       });
     }
 
@@ -297,6 +300,7 @@ export async function importSaveBackup(json: string): Promise<string> {
           regrets: sp.regrets ?? [],
           readingSeconds: sp.readingSeconds ?? 0,
           quests: sp.quests ?? [],
+          tempAbilities: sp.tempAbilities ?? [],
           npcMemories: sp.npcMemories,
           actions: sp.actions,
         }))

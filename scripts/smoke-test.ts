@@ -41,6 +41,10 @@ const splitTitle = parseChapters("第一章\n风起云涌\n\n正文。\n第二�
 check("双行标题合并", splitTitle[0].title, "第一章 风起云涌");
 check("双行标题保留原文", splitTitle[0].content, "风起云涌\n\n正文。");
 check("正文句子不合并标题", splitTitle[1].title, "第二章");
+const noBlankTitle = parseChapters("第一章\n风起云涌\n正文");
+check("无空行不猜测副标题", noBlankTitle[0].title, "第一章");
+check("无空行完整保留正文", noBlankTitle[0].content, "风起云涌\n正文");
+check("无空行短正文不误并", parseChapters("第一章\n天亮了\n他走出房间")[0].title, "第一章");
 check("相邻章节不合并", parseChapters("第一章\n第二章\n\n正文。")[0].title, "第一章");
 check("简单（闲聊）", classifyAction("和萧炎闲聊"), "simple");
 check("中等（结交）", classifyAction("结交纳兰嫣然"), "medium");

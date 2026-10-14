@@ -209,13 +209,11 @@ export function buildRedeemResult(item: ShopItem, npcMemories: NpcMemory[]): str
   if (item.category === "info") {
     return `你获知了与「${item.name}」相关的关键内情，将在后续剧情中发挥作用。`;
   }
-  if (item.category === "item") return `已获得「${item.name}」：${item.desc}（已加入资源栏）`;
   if (item.category === "ability") {
     return item.temporary
       ? `已获得临时能力「${item.name}」（5 章内有效，到期自动失效）`
       : `已习得「${item.name}」：${item.desc}（已加入能力栏）`;
   }
-  if (item.category === "power") return `已获得势力「${item.name}」：${item.desc}（已加入资源栏）`;
   return `获得「${item.name}」：${item.desc}`;
 }
 

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { db } from "../src/lib/db";
 import { useStore } from "../src/lib/store";
-import { itemMechanicalPatch, buildRedeemResult, SHOP_BY_TYPE } from "../src/lib/system";
+import { itemMechanicalPatch, buildRedeemResult, DEFAULT_SHOP, SHOP_BY_TYPE } from "../src/lib/system";
 import { setCached } from "../src/lib/cache";
 import { isLocalAI, recordBackup, shouldRemindBackup } from "../src/lib/settings";
 import { buildSaveBackup, importSaveBackup } from "../src/lib/export";
@@ -100,7 +100,42 @@ async function redeemGrantsAbility() {
   assert.equal(sys2.tempAbilities[0].expiresAtChapter, 5); // 第 0 章 + 5
   const pc = (await db.characters.get(pcId))!;
   assert.ok(!pc.abilities.includes("临时技能"), "临时技能不应进永久能力栏");
-  console.log("Mechanical effect passed: temporary ability stored with expiry, not in permanent abilities");
+  assert.equal(buildRedeemResult(DEFAULT_SHOP.find(i => i.id === "ability-temp")!, []), "已获得临时能力「临时技能」（5 章内有效，到期自动失效）");
+  await db.systemStates.update(sys.id!, {tempAbilities:[
+    {name:"already expired",expiresAtChapter:4},
+    {name:"expires now",expiresAtChapter:5},
+    {name:"still active",expiresAtChapter:6},
+  ]});
+  useStore.setState({currentChapterIndex:5});
+  await useStore.getState().redeem("ability-temp");
+  const afterExpiry = (await db.systemStates.get(sys.id!))!;
+  assert.deepEqual(afterExpiry.tempAbilities,[
+    {name:"still active",expiresAtChapter:6},
+    {name:"临时技能",expiresAtChapter:10},
+  ]);
+  assert.deepEqual(useStore.getState().systemState!.tempAbilities,afterExpiry.tempAbilities);
+  assert.deepEqual((await db.characters.get(pcId))!.abilities,["read"]);
+  console.log("Temporary ability boundaries passed: expired/current expiry filtered, future expiry kept, no permanent ability changes");
+
+  const power = DEFAULT_SHOP.find(i => i.id === "power-buff")!;
+  const seal = SHOP_BY_TYPE["权谋"].find(i => i.id === "quan-5")!;
+  const phoenix = SHOP_BY_TYPE["后宫"].find(i => i.id === "gong-5")!;
+  assert.equal(power.target,undefined);
+  assert.equal(seal.target,"resources");
+  assert.equal(phoenix.target,"resources");
+  useStore.setState({shopItems:[power,seal,phoenix]});
+  await db.systemStates.update(sys.id!,{points:1000});
+  for (const item of [power,seal,phoenix]) await useStore.getState().redeem(item.id);
+  const redeemedPC = (await db.characters.get(pcId))!;
+  assert.deepEqual(redeemedPC.connections,[power.name]);
+  assert.deepEqual(redeemedPC.resources,[seal.name,phoenix.name]);
+  const powerSystem = (await db.systemStates.get(sys.id!))!;
+  assert.equal(powerSystem.points,560);
+  for (const item of [power,seal,phoenix]) {
+    const result = powerSystem.redeemed.find(r => r.name === item.name)!.result!;
+    assert.ok(result.includes(item === power ? "人脉栏" : "资源栏"));
+  }
+  console.log("Power redemption passed: default power -> connections, both explicit seals -> resources, balances and result text match");
 }
 
 async function main() {
@@ -168,6 +203,25 @@ async function main() {
   console.log("DB tests passed: snapshot, restore, rollback, concurrent redeem/reading, cache eviction; URL boundaries");
   await backupRoundTrip();
   await redeemGrantsAbility();
+  // A stale selected save must neither reject nor change the visible chapter/state.
+  const staleSaveId = useStore.getState().currentSaveId!;
+  const staleBookId = useStore.getState().currentBookId!;
+  const chapter = {bookId:staleBookId,index:0,title:"chapter",content:"new text",charCount:8,nodes:[],actions:[]};
+  await db.chapters.add(chapter);
+  useStore.setState({chapterList:[{index:0,title:"chapter",charCount:8}],currentChapterIndex:0,currentContent:"keep text"});
+  await useStore.getState().gotoChapter(0);
+  assert.equal(useStore.getState().currentContent,"new text");
+  assert.ok(useStore.getState().systemState!.readChapters.includes(0));
+  useStore.setState({currentContent:"keep text"});
+  await db.saves.delete(staleSaveId);
+  const before = useStore.getState();
+  await useStore.getState().gotoChapter(0);
+  assert.strictEqual(useStore.getState(),before);
+  useStore.setState({currentChapterIndex:1});
+  const beforeAutoSave = useStore.getState();
+  await useStore.getState().gotoChapter(0);
+  assert.strictEqual(useStore.getState(),beforeAutoSave);
+  console.log("Deleted-save chapter navigation passed: no rejection or UI state changes");
   await db.delete();
 }
 main().catch(error => {console.error(error);process.exitCode=1;});

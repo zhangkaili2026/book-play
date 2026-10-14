@@ -354,29 +354,37 @@ export const useStore = create<AppState>((set, get) => ({
     const { currentBookId, currentSaveId, chapterList, currentChapterIndex } = get();
     if (currentBookId == null || index < 0 || index >= chapterList.length) return;
 
-    const chapter = await db.chapters
-      .where("[bookId+index]")
-      .equals([currentBookId, index])
-      .first();
+    try {
+      const chapter = await db.chapters
+        .where("[bookId+index]")
+        .equals([currentBookId, index])
+        .first();
 
-    if (!chapter || request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
-    // 自动存档：真正翻到新的一章时，先存当前章的快照
-    if (currentSaveId != null && index !== currentChapterIndex) {
-      await get().autoSavePoint();
-    }
-    if (request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
-    set({ currentChapterIndex: index, currentContent: chapter.content, selection: null });
-
-    if (currentSaveId != null) {
-      await db.saves.update(currentSaveId, { lastChapterIndex: index });
-      // 读新章节经验（已读过的章节不再加）
-      const sys = await getOrCreateSystemState(currentSaveId);
-      if (!sys.readChapters.includes(index)) {
-        const updated = await grantXp(currentSaveId, XP_RULES.newChapter, "阅读新章节", index);
-        if (request === chapterRequest && get().currentSaveId === currentSaveId) set({ systemState: updated });
+      if (!chapter || request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
+      // 自动存档：真正翻到新的一章时，先存当前章的快照
+      if (currentSaveId != null && index !== currentChapterIndex) {
+        await get().autoSavePoint();
       }
-    } else {
-      await db.books.update(currentBookId, { lastReadIndex: index });
+      if (request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
+
+      let updatedSystemState: SystemState | undefined;
+      if (currentSaveId != null) {
+        await db.saves.update(currentSaveId, { lastChapterIndex: index });
+        // 读新章节经验（已读过的章节不再加）
+        const sys = await getOrCreateSystemState(currentSaveId);
+        if (!sys.readChapters.includes(index)) {
+          updatedSystemState = await grantXp(currentSaveId, XP_RULES.newChapter, "阅读新章节", index);
+        }
+      } else {
+        await db.books.update(currentBookId, { lastReadIndex: index });
+      }
+      if (request !== chapterRequest || get().currentBookId !== currentBookId || get().currentSaveId !== currentSaveId) return;
+      set({ currentChapterIndex: index, currentContent: chapter.content, selection: null,
+        ...(updatedSystemState ? { systemState: updatedSystemState } : {}),
+      });
+    } catch {
+      // A deleted save or failed database operation must not publish a partial chapter change.
+      return;
     }
   },
 

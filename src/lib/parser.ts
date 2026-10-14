@@ -36,6 +36,7 @@ export function parseChapters(raw: string): ParsedChapter[] {
       }
       current = { title: trimmed, content: "" };
       // 仅扩展目录标题，第二行仍保留在正文，避免误判时吞掉原文。
+      // 无空行时，短副标题与无标点的首行正文无法可靠区分；保留空行条件，避免扩大误合并。
       const subtitle = lines[lineIndex + 1]?.trim() ?? "";
       if (/^(第[零一二三四五六七八九十百千万0-9]+[章节回卷集部篇]|Chapter\s+\d+)$/i.test(trimmed)
         && subtitle.length > 0 && subtitle.length <= 20

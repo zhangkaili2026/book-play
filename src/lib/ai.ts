@@ -89,6 +89,7 @@ export function buildActionPrompt(ctx: {
   };
   inventory?: import("./db").InventoryItem[];
   itemMessages?: string[];
+  tempAbilities?: { name: string; expiresAtChapter: number }[];
   chapterTitle: string;
   recentActions: string[];
   action: string;
@@ -115,7 +116,7 @@ export function buildActionPrompt(ctx: {
   const user = [
     `【你的角色】姓名：${ctx.pc.name}；身份：${ctx.pc.identity}；阵营：${ctx.pc.faction}`,
     `【能力】${ctx.pc.abilities.join("、") || "无"}；【势力】${ctx.pc.power}；【资源】${ctx.pc.resources.join("、") || "无"}`,
-    inventoryPrompt(ctx.inventory ?? [], ctx.itemMessages ?? []),
+    inventoryPrompt(ctx.inventory ?? [], ctx.itemMessages ?? [], ctx.tempAbilities ?? []),
     `【当前章节】${ctx.chapterTitle}`,
     ctx.recentActions.length
       ? `【最近行动】${ctx.recentActions.slice(0, 5).map((a, i) => `${i + 1}. ${a}`).join("；")}`

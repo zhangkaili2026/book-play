@@ -101,10 +101,10 @@ async function redeemGrantsAbility() {
   const sys2 = (await db.systemStates.get(sys.id!))!;
   assert.equal(sys2.points, 80); // 100 - 20
   assert.equal(sys2.tempAbilities.length, 1);
-  assert.equal(sys2.tempAbilities[0].name, "临时技能");
+  assert.ok(sys2.tempAbilities[0].name.length > 0); // 具体技能名（从功法池随机）
   assert.equal(sys2.tempAbilities[0].expiresAtChapter, 5); // 第 0 章 + 5
   const pc = (await db.characters.get(pcId))!;
-  assert.ok(!pc.abilities.includes("临时技能"), "临时技能不应进永久能力栏");
+  assert.ok(!pc.abilities.includes(sys2.tempAbilities[0].name), "临时技能不应进永久能力栏");
   assert.equal(buildRedeemResult(DEFAULT_SHOP.find(i => i.id === "ability-temp")!, []), "已获得临时能力「临时技能」（5 章内有效，到期自动失效）");
   await db.systemStates.update(sys.id!, {tempAbilities:[
     {name:"already expired",expiresAtChapter:4},
@@ -114,10 +114,10 @@ async function redeemGrantsAbility() {
   useStore.setState({currentChapterIndex:5});
   await useStore.getState().redeem("ability-temp");
   const afterExpiry = (await db.systemStates.get(sys.id!))!;
-  assert.deepEqual(afterExpiry.tempAbilities,[
-    {name:"still active",expiresAtChapter:6},
-    {name:"临时技能",expiresAtChapter:10},
-  ]);
+  assert.equal(afterExpiry.tempAbilities.length, 2);
+  assert.deepEqual(afterExpiry.tempAbilities[0], {name:"still active",expiresAtChapter:6});
+  assert.equal(afterExpiry.tempAbilities[1].expiresAtChapter, 10);
+  assert.ok(afterExpiry.tempAbilities[1].name.length > 0);
   assert.deepEqual(useStore.getState().systemState!.tempAbilities,afterExpiry.tempAbilities);
   assert.deepEqual((await db.characters.get(pcId))!.abilities,["read"]);
   console.log("Temporary ability boundaries passed: expired/current expiry filtered, future expiry kept, no permanent ability changes");

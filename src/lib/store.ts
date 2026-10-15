@@ -567,9 +567,11 @@ export const useStore = create<AppState>((set, get) => ({
       } else {
         // 先查缓存：相同角色 + 相同章节 + 相同行动 → 直接复用，0 token
         const inventory = await db.items.where("saveId").equals(currentSaveId).toArray();
-        const itemMessages = (await db.systemStates.where("saveId").equals(currentSaveId).first())?.messages ?? [];
+        const sysState = await db.systemStates.where("saveId").equals(currentSaveId).first();
+        const itemMessages = sysState?.messages ?? [];
+        const activeTempAbilities = (sysState?.tempAbilities ?? []).filter((t) => t.expiresAtChapter > currentChapterIndex);
         const cacheKey = buildCacheKey({
-          itemContext: inventoryPrompt(inventory,itemMessages),
+          itemContext: inventoryPrompt(inventory,itemMessages,activeTempAbilities),
           model: settings.model,
           saveId: currentSaveId,
           pcName: currentPC.name,
@@ -588,7 +590,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else {
           try {
             const messages = buildActionPrompt({
-              inventory, itemMessages,
+              inventory, itemMessages, tempAbilities: activeTempAbilities,
               pc: {
                 name: currentPC.name,
                 identity: currentPC.identity,
@@ -845,12 +847,17 @@ export const useStore = create<AppState>((set, get) => ({
 
       if (sys.points < item.cost) return null; // 点数不足
 
-      // 临时能力：记录过期章节（到期自动失效）；永久能力/道具/势力写进角色数据
+      // 临时能力：从功法池随机一个具体技能，记录过期章节（到期自动失效）
       let tempAbilities = sys.tempAbilities ?? [];
+      let skillName = "";
       if (item.temporary) {
+        const book = await db.books.get(save.bookId);
+        const pool = getItemPool(book?.templates?.bookType);
+        const skills = pool.filter((i) => i.type === "功法");
+        skillName = skills.length ? skills[Math.floor(Math.random() * skills.length)].name : "临时技能";
         tempAbilities = [
           ...tempAbilities.filter((t) => t.expiresAtChapter > currentChapterIndex),
-          { name: item.name, expiresAtChapter: currentChapterIndex + 5 },
+          { name: skillName, expiresAtChapter: currentChapterIndex + 5 },
         ];
       } else if (!item.id.startsWith("pool:") && item.id !== "gacha") {
         const pc = await db.characters.get(currentPC.id!);
@@ -860,7 +867,9 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
-      let result = buildRedeemResult(item, npcMemories);
+      let result = item.temporary
+        ? `获得临时能力「${skillName}」（5 章内有效，到期自动失效），已显示在「角色 → 能力 → 临时能力」，复杂行动时 AI 会参考它`
+        : buildRedeemResult(item, npcMemories);
       if (item.id.startsWith("pool:") || item.id === "gacha") {
         const book = await db.books.get(save.bookId);
         const pool = getItemPool(book?.templates?.bookType);

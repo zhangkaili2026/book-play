@@ -103,7 +103,8 @@ export function getInventoryShop(bookType=""): ShopItem[] {
  return [...Array.from(new Set(getItemPool(bookType).map(i=>i.type))).map(type=>({id:`pool:${type}`,name:type,desc:`从${type}池随机获得一件，数量 1～3`,cost:20,category:"item" as const,tier:"初级" as const})),{id:"gacha",name:"🎴 抽卡",desc:"普通40% / 稀有30% / 史诗20% / 传说10%，数量1～3",cost:40,category:"special",tier:"中级"}];
 }
 
-export function inventoryPrompt(items: import("./db").InventoryItem[], messages: string[] = []): string {
+export function inventoryPrompt(items: import("./db").InventoryItem[], messages: string[] = [], tempAbilities: { name: string; expiresAtChapter: number }[] = []): string {
  const held = [...items].sort((a,b)=>(b.id??0)-(a.id??0)).slice(0,8).sort((a,b)=>RARITY_WEIGHT[b.rarity]-RARITY_WEIGHT[a.rarity]);
- return `你当前持有：${held.map(i=>`${i.name.slice(0,30)}×${i.quantity}【${RARITY_LABEL[i.rarity]}】`).join("、") || "无"}。稀有度越高，叙事分量越重，但仍须遵守世界观与行动条件。\n近期使用：${messages.filter(m=>m.startsWith("使用「")).slice(-3).map(m=>m.slice(0,180)).join("；") || "无"}`;
+ const tempLine = tempAbilities.length ? "临时能力（短期有效）：" + tempAbilities.slice(0,5).map(t=>t.name.slice(0,20)).join("、") + "。" : "";
+ return `你当前持有：${held.map(i=>`${i.name.slice(0,30)}×${i.quantity}【${RARITY_LABEL[i.rarity]}】`).join("、") || "无"}。稀有度越高，叙事分量越重，但仍须遵守世界观与行动条件。${tempLine}\n近期使用：${messages.filter(m=>m.startsWith("使用「")).slice(-3).map(m=>m.slice(0,180)).join("；") || "无"}`;
 }

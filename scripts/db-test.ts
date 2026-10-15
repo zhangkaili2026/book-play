@@ -189,6 +189,48 @@ async function inventoryTests() {
   assert.ok(prompt[1].content.includes("你当前持有"));assert.ok(prompt[1].content.includes("narrative effect"));
   const key={model:"x",saveId,pcName:"x",chapterIndex:0,recentActions:[],action:"x"};assert.notEqual(buildCacheKey({...key,itemContext:ctx}),buildCacheKey({...key,itemContext:"changed"}));
   // 读档应还原背包，防止刷物品
+  const rollbackPC = (await db.characters.get(pcId))!;
+  const rollbackItem = await db.items.add({saveId,name:"rollback skill",type:"功法",quantity:1,rarity:"rare",desc:"x",effect:"x"});
+  const moneyItem = await db.items.add({saveId,name:"rollback money",type:"钱财",quantity:1,rarity:"common",desc:"x",effect:"x"});
+  await useStore.getState().createSavePoint("before item use");
+  const rollbackPoint = (await db.savePoints.toArray()).at(-1)!;
+  await useStore.getState().useItem(rollbackItem);await useStore.getState().useItem(moneyItem);
+  assert.ok((await db.characters.get(pcId))!.abilities.includes("rollback skill"));
+  await useStore.getState().restoreSavePoint(rollbackPoint.id!);
+  assert.deepEqual((await db.characters.get(pcId))!.abilities,rollbackPC.abilities);
+  assert.deepEqual((await db.characters.get(pcId))!.resources,rollbackPC.resources);
+  assert.ok((await db.items.toArray()).some(i=>i.name === "rollback skill"));
+  // Legacy snapshots have no characterState and must remain loadable.
+  await db.savePoints.update(rollbackPoint.id!,{characterState:undefined});
+  await useStore.getState().restoreSavePoint(rollbackPoint.id!);
+  const beforeDelete = await db.items.toArray();
+  const refuseDelete = () => { throw new Error("injected delete failure"); };
+  db.saves.hook("deleting",refuseDelete);
+  try {
+    await assert.rejects(useStore.getState().deleteSave(saveId),/injected delete failure/);
+    assert.deepEqual(await db.items.toArray(),beforeDelete);
+    assert.ok(await db.characters.get(pcId));
+    await assert.rejects(useStore.getState().deleteBook(bookId),/injected delete failure/);
+    assert.deepEqual(await db.items.toArray(),beforeDelete);
+    assert.ok(await db.books.get(bookId));
+  } finally { db.saves.hook("deleting").unsubscribe(refuseDelete); }
+  const exportItem = await db.items.add({saveId,name:"export-race",type:"功法",quantity:1,rarity:"rare",desc:"x",effect:"x"});
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis,"document");
+  const createURL = URL.createObjectURL;
+  let captured: Blob | undefined;
+  Object.defineProperty(globalThis,"document",{configurable:true,value:{createElement:()=>({click(){}}),body:{appendChild(){},removeChild(){}}}});
+  URL.createObjectURL = blob => { captured = blob as Blob; return "blob:test"; };
+  try {
+    await Promise.all([useStore.getState().exportSaveBackup(),useStore.getState().useItem(exportItem)]);
+    const exported = JSON.parse(await captured!.text());
+    const held = exported.items.some((i:{name:string})=>i.name === "export-race");
+    const learned = exported.pc.abilities.includes("export-race");
+    assert.notEqual(held,learned,"backup must describe one consistent pre-use or post-use state");
+  } finally {
+    URL.createObjectURL = createURL;
+    if (originalDocument) Object.defineProperty(globalThis,"document",originalDocument);
+    else Reflect.deleteProperty(globalThis,"document");
+  }
   const beforeSnap=await db.items.count();
   await useStore.getState().createSavePoint("inventory-snap");
   const snap=(await db.savePoints.toArray()).find(p=>p.name==="inventory-snap")!;

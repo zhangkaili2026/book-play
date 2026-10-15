@@ -34,6 +34,7 @@ export async function upsertNpcMemory(
 }
 
 export async function cleanupOrphanData(): Promise<{ removed: number }> {
+  return db.transaction("rw", db.tables, async () => {
   const saves = await db.saves.toArray();
   const books = await db.books.toArray();
   const validSaveIds = new Set(saves.map((s) => s.id!));
@@ -86,17 +87,20 @@ export async function cleanupOrphanData(): Promise<{ removed: number }> {
   }
 
   return { removed };
+  });
 }
 
 export async function snapshotCurrentState(saveId: number) {
-  return db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.items], async () => {
+  return db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.items, db.characters], async () => {
     const save = await db.saves.get(saveId);
     if (!save) throw new Error("Save no longer exists");
     const sys = await getOrCreateSystemState(saveId);
     const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
     const actions = await db.actions.where("saveId").equals(saveId).toArray();
+    const pc = await db.characters.get(save.pcId);
     const items = await db.items.where("saveId").equals(saveId).toArray();
     return {
+      characterState: pc ? {abilities:pc.abilities,resources:pc.resources,connections:pc.connections} : undefined,
       chapterIndex: save?.lastChapterIndex ?? 0,
       offset: save?.offset ?? 0,
       xp: sys.xp,

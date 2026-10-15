@@ -160,6 +160,7 @@ export interface Bookmark {
 
 // —— 存档点（游戏状态快照，用于"玩崩了读档回退"）——
 export interface SavePoint {
+  characterState?: Pick<Character, "abilities" | "resources" | "connections">;
   id?: number;
   saveId: number;
   name: string;

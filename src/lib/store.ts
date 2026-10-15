@@ -469,6 +469,7 @@ export const useStore = create<AppState>((set, get) => ({
   async deleteSave(saveId: number) {
     const { currentBookId, currentSaveId } = get();
 
+    await db.transaction("rw", db.tables, async () => {
     await db.characters.where("saveId").equals(saveId).delete();
     await db.npcMemories.where("saveId").equals(saveId).delete();
     await db.actions.where("saveId").equals(saveId).delete();
@@ -478,6 +479,7 @@ export const useStore = create<AppState>((set, get) => ({
     await db.bookmarks.where("saveId").equals(saveId).delete();
     await db.items.where("saveId").equals(saveId).delete();
     await db.saves.delete(saveId);
+    });
 
     const saves =
       currentBookId != null
@@ -512,6 +514,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async deleteBook(bookId: number) {
+    await db.transaction("rw", db.tables, async () => {
     const saves = await db.saves.where("bookId").equals(bookId).toArray();
     for (const s of saves) {
       await db.characters.where("saveId").equals(s.id!).delete();
@@ -526,6 +529,7 @@ export const useStore = create<AppState>((set, get) => ({
     await db.saves.where("bookId").equals(bookId).delete();
     await db.chapters.where("bookId").equals(bookId).delete();
     await db.books.delete(bookId);
+    });
 
     set((s) => ({
       books: s.books.filter((b) => b.id !== bookId),
@@ -720,6 +724,7 @@ export const useStore = create<AppState>((set, get) => ({
   async exportSaveBackup() {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
+    const result = await db.transaction("rw", db.tables, async () => {
     const save = await db.saves.get(currentSaveId);
     if (!save) return;
     const pc = await db.characters.get(save.pcId);
@@ -733,6 +738,10 @@ export const useStore = create<AppState>((set, get) => ({
     if (!pc || !book) return;
     const items = await db.items.where("saveId").equals(currentSaveId).toArray();
     const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints, highlights, bookmarks, items });
+      return {save,backup};
+    });
+    if (!result) return;
+    const {save,backup} = result;
     download(`书游存档_${save.name}.json`, JSON.stringify(backup, null, 2), "application/json");
     recordBackup();
   },
@@ -746,7 +755,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   async clearAllData() {
-    await Promise.all([
+    await db.transaction("rw", db.tables, () => Promise.all([
       db.books.clear(),
       db.chapters.clear(),
       db.saves.clear(),
@@ -759,7 +768,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.highlights.clear(),
       db.bookmarks.clear(),
       db.items.clear(),
-    ]);
+    ]));
     localStorage.clear();
     set({
       books: [],
@@ -1017,7 +1026,7 @@ export const useStore = create<AppState>((set, get) => ({
   async createSavePoint(name: string) {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items], async () => {
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items, db.characters], async () => {
       const snap = await snapshotCurrentState(currentSaveId);
       await db.savePoints.add({
         saveId: currentSaveId,
@@ -1034,7 +1043,7 @@ export const useStore = create<AppState>((set, get) => ({
   async autoSavePoint() {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items], async () => {
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items, db.characters], async () => {
       const snap = await snapshotCurrentState(currentSaveId);
       await db.savePoints.add({
         saveId: currentSaveId,
@@ -1058,10 +1067,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   async restoreSavePoint(id: number) {
     const originalSaveId = get().currentSaveId;
-    const restoredSaveId = await db.transaction("rw", [db.savePoints, db.saves, db.systemStates, db.npcMemories, db.actions, db.items], async () => {
+    const restoredSaveId = await db.transaction("rw", [db.savePoints, db.saves, db.systemStates, db.npcMemories, db.actions, db.items, db.characters], async () => {
       const sp = await db.savePoints.get(id);
       if (!sp || !await db.saves.get(sp.saveId)) return;
 
+      if (sp.characterState) {
+        const save = (await db.saves.get(sp.saveId))!;
+        await db.characters.update(save.pcId, sp.characterState);
+      }
       await db.saves.update(sp.saveId, {
         lastChapterIndex: sp.chapterIndex,
         offset: sp.offset,

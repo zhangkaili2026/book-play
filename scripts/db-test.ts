@@ -152,7 +152,7 @@ async function inventoryTests() {
   assert.ok(getItemPool("无限流").some(i=>i.name === "复活币"));
   const counts={common:0,rare:0,epic:0,legendary:0};
   for(let n=0;n<10000;n++) {let calls=0;counts[drawItem(pool,true,()=>calls++===0?n/10000:0).rarity]++;}
-  assert.deepEqual(counts,{common:6000,rare:2500,epic:1200,legendary:300});
+  assert.deepEqual(counts,{common:4000,rare:3000,epic:2000,legendary:1000});
   const bookId=await db.books.add({title:"inventory",author:"",totalChars:0,chapterCount:0,createdAt:0,lastReadIndex:0,templates:{bookType:"修仙",items:[]}});
   const saveId=await db.saves.add({bookId,name:"inventory",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
   const pcId=await db.characters.add({saveId,name:"hero",isPC:true,identity:"traveler",faction:"",abilities:[],connections:[],power:"",resources:[]});
@@ -188,7 +188,16 @@ async function inventoryTests() {
   const prompt=buildActionPrompt({pc,chapterTitle:"chapter",recentActions:[],action:"act",inventory:many,itemMessages:messages});
   assert.ok(prompt[1].content.includes("你当前持有"));assert.ok(prompt[1].content.includes("narrative effect"));
   const key={model:"x",saveId,pcName:"x",chapterIndex:0,recentActions:[],action:"x"};assert.notEqual(buildCacheKey({...key,itemContext:ctx}),buildCacheKey({...key,itemContext:"changed"}));
-  console.log("Inventory tests passed: repeated/concurrent redemption, 60/25/12/3 rarity distribution, quantity/use/delete, special types, rejection/rollback, bounded AI and cache context");
+  // 读档应还原背包，防止刷物品
+  const beforeSnap=await db.items.count();
+  await useStore.getState().createSavePoint("inventory-snap");
+  const snap=(await db.savePoints.toArray()).find(p=>p.name==="inventory-snap")!;
+  await db.items.add({saveId,name:"读档后应消失",type:"道具",quantity:1,rarity:"common",desc:"x",effect:"x"});
+  assert.equal(await db.items.count(),beforeSnap+1);
+  await useStore.getState().restoreSavePoint(snap.id!);
+  assert.equal(await db.items.count(),beforeSnap);
+  assert.ok(!(await db.items.toArray()).some(i=>i.name==="读档后应消失"));
+  console.log("Inventory tests passed: repeated/concurrent redemption, 40/30/20/10 rarity distribution, save-point item rollback, quantity/use/delete, special types, rejection/rollback, bounded AI and cache context");
 }
 
 async function main() {

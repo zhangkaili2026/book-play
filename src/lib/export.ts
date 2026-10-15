@@ -308,6 +308,7 @@ export async function importSaveBackup(json: string): Promise<string> {
           readingSeconds: sp.readingSeconds ?? 0,
           quests: sp.quests ?? [],
           tempAbilities: sp.tempAbilities ?? [],
+          items: sp.items ?? [],
           npcMemories: sp.npcMemories,
           actions: sp.actions,
         }))

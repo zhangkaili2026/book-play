@@ -88,16 +88,19 @@ export function getItemPool(bookType = ""): PoolItem[] {
  return key ? ITEM_POOL_BY_TYPE[key] : DEFAULT_POOL;
 }
 export function drawItem(pool: PoolItem[], gacha=false, random= Math.random): PoolItem {
- let candidates=pool;
- if(gacha) {
-  const roll=random(); const rarity: ItemRarity=roll<.6?"common":roll<.85?"rare":roll<.97?"epic":"legendary";
-  candidates=pool.filter(i=>i.rarity===rarity);
-  if(!candidates.length) candidates=pool;
- }
- return candidates[Math.floor(random()*candidates.length)];
+  // 常规兑换偏普通/稀有；抽卡搏高稀有度（史诗+传说概率更高，才值得多花点数）
+  const weights: [ItemRarity, number][] = gacha
+    ? [["common", 0.40], ["rare", 0.30], ["epic", 0.20], ["legendary", 0.10]]
+    : [["common", 0.50], ["rare", 0.30], ["epic", 0.15], ["legendary", 0.05]];
+  const roll = random();
+  let acc = 0, rarity: ItemRarity = "common";
+  for (const [r, w] of weights) { acc += w; if (roll < acc) { rarity = r; break; } }
+  let candidates = pool.filter(i => i.rarity === rarity);
+  if (!candidates.length) candidates = pool;
+  return candidates[Math.floor(random() * candidates.length)];
 }
 export function getInventoryShop(bookType=""): ShopItem[] {
- return [...Array.from(new Set(getItemPool(bookType).map(i=>i.type))).map(type=>({id:`pool:${type}`,name:type,desc:`从${type}池随机获得一件，数量 1～3`,cost:20,category:"item" as const,tier:"初级" as const})),{id:"gacha",name:"🎴 抽卡",desc:"普通60% / 稀有25% / 史诗12% / 传说3%，数量1～3",cost:40,category:"special",tier:"中级"}];
+ return [...Array.from(new Set(getItemPool(bookType).map(i=>i.type))).map(type=>({id:`pool:${type}`,name:type,desc:`从${type}池随机获得一件，数量 1～3`,cost:20,category:"item" as const,tier:"初级" as const})),{id:"gacha",name:"🎴 抽卡",desc:"普通40% / 稀有30% / 史诗20% / 传说10%，数量1～3",cost:40,category:"special",tier:"中级"}];
 }
 
 export function inventoryPrompt(items: import("./db").InventoryItem[], messages: string[] = []): string {

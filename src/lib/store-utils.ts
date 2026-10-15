@@ -89,12 +89,13 @@ export async function cleanupOrphanData(): Promise<{ removed: number }> {
 }
 
 export async function snapshotCurrentState(saveId: number) {
-  return db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions], async () => {
+  return db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.items], async () => {
     const save = await db.saves.get(saveId);
     if (!save) throw new Error("Save no longer exists");
     const sys = await getOrCreateSystemState(saveId);
     const npcMemories = await db.npcMemories.where("saveId").equals(saveId).toArray();
     const actions = await db.actions.where("saveId").equals(saveId).toArray();
+    const items = await db.items.where("saveId").equals(saveId).toArray();
     return {
       chapterIndex: save?.lastChapterIndex ?? 0,
       offset: save?.offset ?? 0,
@@ -110,6 +111,7 @@ export async function snapshotCurrentState(saveId: number) {
       tempAbilities: sys.tempAbilities ?? [],
       npcMemories,
       actions,
+      items,
     };
   });
 }

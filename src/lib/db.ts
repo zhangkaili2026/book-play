@@ -179,6 +179,7 @@ export interface SavePoint {
   tempAbilities: { name: string; expiresAtChapter: number }[];
   npcMemories: NpcMemory[];   // NPC 记忆副本
   actions: ActionRecord[];    // 行动记录副本
+  items?: InventoryItem[];     // 背包物品副本（旧存档点可能没有）
 }
 
 export type ItemRarity = "common" | "rare" | "epic" | "legendary";

@@ -1017,7 +1017,7 @@ export const useStore = create<AppState>((set, get) => ({
   async createSavePoint(name: string) {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints], async () => {
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items], async () => {
       const snap = await snapshotCurrentState(currentSaveId);
       await db.savePoints.add({
         saveId: currentSaveId,
@@ -1034,7 +1034,7 @@ export const useStore = create<AppState>((set, get) => ({
   async autoSavePoint() {
     const { currentSaveId } = get();
     if (currentSaveId == null) return;
-    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints], async () => {
+    await db.transaction("rw", [db.saves, db.systemStates, db.npcMemories, db.actions, db.savePoints, db.items], async () => {
       const snap = await snapshotCurrentState(currentSaveId);
       await db.savePoints.add({
         saveId: currentSaveId,
@@ -1058,7 +1058,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   async restoreSavePoint(id: number) {
     const originalSaveId = get().currentSaveId;
-    const restoredSaveId = await db.transaction("rw", [db.savePoints, db.saves, db.systemStates, db.npcMemories, db.actions], async () => {
+    const restoredSaveId = await db.transaction("rw", [db.savePoints, db.saves, db.systemStates, db.npcMemories, db.actions, db.items], async () => {
       const sp = await db.savePoints.get(id);
       if (!sp || !await db.saves.get(sp.saveId)) return;
 
@@ -1107,6 +1107,21 @@ export const useStore = create<AppState>((set, get) => ({
             ...(a.cost != null
               ? { cost: a.cost, promptTokens: a.promptTokens, completionTokens: a.completionTokens, cached: a.cached }
               : {}),
+          }))
+        );
+      }
+      await db.items.where("saveId").equals(sp.saveId).delete();
+      const items = sp.items ?? [];
+      if (items.length) {
+        await db.items.bulkAdd(
+          items.map((it) => ({
+            saveId: sp.saveId,
+            name: it.name,
+            type: it.type,
+            quantity: it.quantity,
+            desc: it.desc,
+            rarity: it.rarity,
+            effect: it.effect,
           }))
         );
       }

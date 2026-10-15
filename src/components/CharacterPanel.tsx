@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { RARITY_LABEL } from "@/lib/itemPool";
+import { useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { offsetTier } from "@/lib/actions";
 import { TIER_ORDER, CATEGORY_LABEL, XP_PER_LEVEL } from "@/lib/system";
 
-export type Tab = "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
+export type Tab = "inventory" | "profile" | "abilities" | "power" | "history" | "relations" | "offset" | "system";
 
 const TABS: { key: Tab; label: string }[] = [
+  {key:"inventory",label:"🎒 背包"},
   { key: "profile", label: "档案" },
   { key: "abilities", label: "能力" },
   { key: "power", label: "势力" },
@@ -34,6 +36,8 @@ export default function CharacterPanel({
   const chapterList = useStore((s) => s.chapterList);
   const currentChapterIndex = useStore((s) => s.currentChapterIndex);
   const systemState = useStore((s) => s.systemState);
+  const inventory = useStore(s=>s.inventory);
+  const consumeItem = useStore(s=>s.useItem);
   const redeem = useStore((s) => s.redeem);
   const shopItems = useStore((s) => s.shopItems);
   const addRegret = useStore((s) => s.addRegret);
@@ -49,15 +53,24 @@ export default function CharacterPanel({
   const [regretText, setRegretText] = useState("");
   const [questText, setQuestText] = useState("");
 
+  const [itemBusy,setItemBusy] = useState(false);
+  const [itemError,setItemError] = useState("");
+  const itemPending = useRef(false);
+  async function itemAction(task:()=>Promise<void>) {
+    if(itemPending.current) return;
+    itemPending.current=true;setItemBusy(true);setItemError("");
+    try {await task();} catch {setItemError("操作未完成，请重试；若存储空间不足，请先备份并清理空间。");}
+    finally {itemPending.current=false;setItemBusy(false);}
+  }
   if (!currentPC) return null;
 
   const chapterTitle = chapterList[currentChapterIndex]?.title ?? "—";
   const bigEvents = allActions.filter((a) => a.kind === "complex" && a.cost != null); // 只算真正生效的复杂行动
   const npcs = [...npcMemories].sort((a, b) => b.trust - a.trust);
   const points = systemState?.points ?? 0;
-  const redeemedNames = new Set((systemState?.redeemed ?? []).map((r) => r.name));
+
   // 有可兑换项（且未兑换）→ 系统 tab 亮小红点
-  const hasAffordable = shopItems.some((i) => points >= i.cost && !redeemedNames.has(i.name));
+  const hasAffordable = shopItems.some((i) => points >= i.cost);
   // 未过期的临时能力
   const activeTempAbilities = (systemState?.tempAbilities ?? []).filter((t) => t.expiresAtChapter > currentChapterIndex);
 
@@ -157,6 +170,17 @@ export default function CharacterPanel({
           </div>
         )}
 
+        {itemError && <p role="alert" className="text-sm text-red-500">{itemError}</p>}
+        {tab === "inventory" && <div className="space-y-3">
+          <p className="text-xs text-gray-500">使用物品会消耗 1 件并留下叙事；复杂行动会参考持有和近期使用的物品。物品不改写原文。</p>
+          {!inventory.length && <p>背包为空，推进剧情获得点数后可到系统商城兑换。</p>}
+          {inventory.map(item=><div key={item.id} className="rounded border p-3 dark:border-gray-700">
+            <div className="font-medium">{item.name} ×{item.quantity} · {RARITY_LABEL[item.rarity]}</div>
+            <p className="text-xs text-gray-500">{item.type} · {item.desc}</p>
+            <p className="mt-1 text-xs">{item.effect}</p>
+            <button disabled={itemBusy} onClick={()=>itemAction(()=>consumeItem(item.id!))} className="mt-2 rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-40">使用</button>
+          </div>)}
+        </div>}
         {tab === "abilities" && (
           <div className="space-y-4">
             <Section title="固有技能" items={currentPC.abilities} />
@@ -471,7 +495,7 @@ export default function CharacterPanel({
                     <div className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">{tier}</div>
                     <div className="space-y-2">
                       {items.map((item) => {
-                        const redeemed = redeemedNames.has(item.name);
+
                         const enough = points >= item.cost;
                         const locked = offset >= 0.8;
                         return (
@@ -479,9 +503,6 @@ export default function CharacterPanel({
                             <div className="flex items-center justify-between">
                               <span className="font-medium text-gray-800 dark:text-gray-200">
                                 {item.name}
-                                {redeemed && (
-                                  <span className="ml-1 text-xs text-green-600 dark:text-green-400">已兑换</span>
-                                )}
                                 <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">
                                   ({CATEGORY_LABEL[item.category]})
                                 </span>
@@ -490,13 +511,11 @@ export default function CharacterPanel({
                             </div>
                             <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{item.desc}</div>
                             <button
-                              onClick={() => redeem(item.id)}
-                              disabled={redeemed || !enough || locked}
+                              onClick={() => itemAction(()=>redeem(item.id))}
+                              disabled={itemBusy || !enough || locked}
                               className="mt-2 w-full rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40"
                             >
-                              {redeemed
-                                ? "已兑换"
-                                : locked
+                              {locked
                                   ? "世界排斥，不可兑换"
                                   : enough
                                     ? "兑换"

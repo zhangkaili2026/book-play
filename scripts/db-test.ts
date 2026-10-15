@@ -1,5 +1,8 @@
-﻿import "fake-indexeddb/auto";
-import assert from "node:assert/strict";
+import "fake-indexeddb/auto";
+import { getItemPool, getInventoryShop, drawItem, inventoryPrompt } from "../src/lib/itemPool";
+import { buildActionPrompt } from "../src/lib/ai";
+import { buildCacheKey } from "../src/lib/cache";
+﻿import assert from "node:assert/strict";
 import { db } from "../src/lib/db";
 import { useStore } from "../src/lib/store";
 import { itemMechanicalPatch, buildRedeemResult, DEFAULT_SHOP, SHOP_BY_TYPE } from "../src/lib/system";
@@ -21,6 +24,7 @@ async function backupRoundTrip() {
     {saveId,chapterIndex:0,kind:"simple",content:"look",result:"seen",createdAt:4,paraIndex:0},
   ]);
   await db.systemStates.add({saveId,xp:120,level:2,points:17,redeemed:[{name:"item",at:5}],messages:["message"],readChapters:[0],regrets:["regret"],readingSeconds:123,quests:[{text:"quest",done:true}],tempAbilities:[{name:"临时技能",expiresAtChapter:5}]});
+  await db.items.add({saveId,name:"铁剑",type:"武器",quantity:3,rarity:"rare",desc:"round trip item",effect:"draw sword"});
   await db.highlights.add({saveId,chapterIndex:0,paraIndex:1,text:"note",createdAt:6});
   await db.bookmarks.add({saveId,chapterIndex:0,createdAt:7});
   useStore.setState({currentSaveId:saveId,currentBookId:bookId,chapterList:[]});
@@ -29,7 +33,7 @@ async function backupRoundTrip() {
     book:(await db.books.get(bookId))!, save:(await db.saves.get(saveId))!, pc:(await db.characters.get(pcId))!,
     npcMemories:await db.npcMemories.toArray(), actions:await db.actions.toArray(),
     systemState:(await db.systemStates.toArray())[0], savePoints:await db.savePoints.toArray(),
-    highlights:await db.highlights.toArray(), bookmarks:await db.bookmarks.toArray(),
+    highlights:await db.highlights.toArray(), bookmarks:await db.bookmarks.toArray(), items:await db.items.toArray(),
   });
   const json = JSON.stringify(backup);
   await db.delete();
@@ -65,6 +69,7 @@ async function backupRoundTrip() {
     [await db.savePoints.toArray(),backup.savePoints!],
     [await db.highlights.toArray(),backup.highlights!],
     [await db.bookmarks.toArray(),backup.bookmarks!],
+    [await db.items.toArray(),backup.items!],
   ] as const;
   for (const [actual,expected] of pairs) {
     assert.deepEqual(actual.map(stripKeys),expected.map(stripKeys));
@@ -88,7 +93,7 @@ async function redeemGrantsAbility() {
   const saveId = await db.saves.add({bookId,name:"mech",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
   const pcId = await db.characters.add({saveId,name:"hero",isPC:true,identity:"x",faction:"x",abilities:["read"],connections:[],power:"x",resources:[]});
   await db.saves.update(saveId,{pcId});
-  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[]});
+  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[],shopItems:DEFAULT_SHOP});
   await useStore.getState().switchSave(saveId);
   const sys = (await db.systemStates.where("saveId").equals(saveId).first())!;
   await db.systemStates.update(sys.id!, {points:100});
@@ -138,6 +143,54 @@ async function redeemGrantsAbility() {
   console.log("Power redemption passed: default power -> connections, both explicit seals -> resources, balances and result text match");
 }
 
+async function inventoryTests() {
+  await db.delete(); await db.open();
+  assert.equal(db.verno,8);
+  const pool=getItemPool("东方修仙玄幻");
+  assert.ok(pool.some(i=>i.name === "聚气丹"));
+  assert.ok(getItemPool("宫斗").some(i=>i.name === "生子丹"));
+  assert.ok(getItemPool("无限流").some(i=>i.name === "复活币"));
+  const counts={common:0,rare:0,epic:0,legendary:0};
+  for(let n=0;n<10000;n++) {let calls=0;counts[drawItem(pool,true,()=>calls++===0?n/10000:0).rarity]++;}
+  assert.deepEqual(counts,{common:6000,rare:2500,epic:1200,legendary:300});
+  const bookId=await db.books.add({title:"inventory",author:"",totalChars:0,chapterCount:0,createdAt:0,lastReadIndex:0,templates:{bookType:"修仙",items:[]}});
+  const saveId=await db.saves.add({bookId,name:"inventory",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
+  const pcId=await db.characters.add({saveId,name:"hero",isPC:true,identity:"traveler",faction:"",abilities:[],connections:[],power:"",resources:[]});
+  await db.saves.update(saveId,{pcId});
+  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[],shopItems:getInventoryShop("修仙")});
+  await useStore.getState().switchSave(saveId);
+  const sys=(await db.systemStates.where("saveId").equals(saveId).first())!;
+  await db.systemStates.update(sys.id!,{points:200});
+  await Promise.all([useStore.getState().redeem("pool:丹药"),useStore.getState().redeem("pool:丹药")]);
+  let rows=await db.items.toArray();
+  assert.equal(rows.length,2);assert.ok(rows.every(i=>i.type === "丹药" && i.quantity>=1 && i.quantity<=3 && pool.some(p=>p.name===i.name)));
+  assert.equal((await db.systemStates.get(sys.id!))!.points,160);
+  await useStore.getState().redeem("gacha");assert.equal(await db.items.count(),3);
+  await db.saves.update(saveId,{offset:.8});await useStore.getState().redeem("gacha");assert.equal(await db.items.count(),3);
+  await db.saves.update(saveId,{offset:0});await db.systemStates.update(sys.id!,{points:0});await useStore.getState().redeem("gacha");assert.equal(await db.items.count(),3);
+  await db.systemStates.update(sys.id!,{points:100});
+  const fail=()=>{throw new Error("inventory write failure");};db.items.hook("creating",fail);
+  await assert.rejects(useStore.getState().redeem("gacha"),/inventory write failure/);db.items.hook("creating").unsubscribe(fail);
+  assert.equal((await db.systemStates.get(sys.id!))!.points,100);
+  const itemId=rows[0].id!;await db.items.update(itemId,{quantity:2});
+  await useStore.getState().useItem(itemId);assert.equal((await db.items.get(itemId))!.quantity,1);
+  await Promise.all([useStore.getState().useItem(itemId),useStore.getState().useItem(itemId)]);assert.equal(await db.items.get(itemId),undefined);
+  for(const type of ["功法","钱财","情报"]) {
+    const id=await db.items.add({saveId,name:`test-${type}`,type,quantity:1,rarity:"epic",desc:"secret detail",effect:"narrative effect"});
+    await useStore.getState().useItem(id);
+  }
+  const pc=(await db.characters.get(pcId))!;assert.deepEqual(pc.abilities,["test-功法"]);assert.deepEqual(pc.resources,["test-钱财"]);
+  const messages=(await db.systemStates.get(sys.id!))!.messages;assert.ok(messages.at(-1)!.includes("secret detail"));
+  rows=await db.items.toArray();
+  const base=rows[0];
+  const many=Array.from({length:20},(_,i)=>({...base,id:i+1,name:`bounded-${i}`,rarity:i===19?"legendary" as const:"common" as const}));
+  const ctx=inventoryPrompt(many,messages);assert.ok(ctx.includes("bounded-19"));assert.ok(!ctx.includes("bounded-0×"));assert.equal((ctx.match(/×/g)??[]).length,8);
+  const prompt=buildActionPrompt({pc,chapterTitle:"chapter",recentActions:[],action:"act",inventory:many,itemMessages:messages});
+  assert.ok(prompt[1].content.includes("你当前持有"));assert.ok(prompt[1].content.includes("narrative effect"));
+  const key={model:"x",saveId,pcName:"x",chapterIndex:0,recentActions:[],action:"x"};assert.notEqual(buildCacheKey({...key,itemContext:ctx}),buildCacheKey({...key,itemContext:"changed"}));
+  console.log("Inventory tests passed: repeated/concurrent redemption, 60/25/12/3 rarity distribution, quantity/use/delete, special types, rejection/rollback, bounded AI and cache context");
+}
+
 async function main() {
   const memory = new Map<string,string>();
   const originalStorage = Object.getOwnPropertyDescriptor(globalThis,"localStorage");
@@ -171,7 +224,7 @@ async function main() {
   const saveId = await db.saves.add({bookId,name:"test",pcId:0,offset:0,createdAt:0,lastChapterIndex:0});
   const pcId = await db.characters.add({saveId,name:"hero",isPC:true,identity:"scholar",faction:"academy",abilities:["read"],connections:[],power:"library",resources:[]});
   await db.saves.update(saveId,{pcId});
-  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[]});
+  useStore.setState({currentBookId:bookId,currentSaveId:saveId,chapterList:[],shopItems:DEFAULT_SHOP});
   await useStore.getState().switchSave(saveId);
   const fields = {xp:120,level:2,points:5,redeemed:[{name:"old",at:1}],messages:["old"],readChapters:[0],regrets:["old"],readingSeconds:10,quests:[{text:"old",done:true}]};
   const sys = (await db.systemStates.where("saveId").equals(saveId).first())!;
@@ -222,6 +275,7 @@ async function main() {
   await useStore.getState().gotoChapter(0);
   assert.strictEqual(useStore.getState(),beforeAutoSave);
   console.log("Deleted-save chapter navigation passed: no rejection or UI state changes");
+  await inventoryTests();
   await db.delete();
 }
 main().catch(error => {console.error(error);process.exitCode=1;});

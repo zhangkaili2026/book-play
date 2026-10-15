@@ -111,6 +111,7 @@ export interface SaveBackup {
   npcMemories: NpcMemory[];
   actions: ActionRecord[];
   highlights?: Highlight[];
+  items?: import("./db").InventoryItem[];
   bookmarks?: Bookmark[];
   systemState?: {
     xp: number;
@@ -136,6 +137,7 @@ export function buildSaveBackup(ctx: {
   systemState: SystemState;
   savePoints: SavePoint[];
   highlights: Highlight[];
+  items?: import("./db").InventoryItem[];
   bookmarks: Bookmark[];
 }): SaveBackup {
   return {
@@ -149,6 +151,7 @@ export function buildSaveBackup(ctx: {
     actions: ctx.actions,
     highlights: ctx.highlights,
     bookmarks: ctx.bookmarks,
+    items: ctx.items ?? [],
     systemState: {
       xp: ctx.systemState.xp,
       level: ctx.systemState.level,
@@ -185,7 +188,7 @@ export async function importSaveBackup(json: string): Promise<string> {
     throw new Error(`请先导入《${data.book.title}》的原文 txt，再导入这个存档`);
   }
   // 顺带恢复 AI 开局身份模板（若这本书还没有）
-  return db.transaction("rw", [db.books, db.saves, db.characters, db.npcMemories, db.actions, db.highlights, db.bookmarks, db.systemStates, db.savePoints], async () => {
+  return db.transaction("rw", [db.books, db.saves, db.characters, db.npcMemories, db.actions, db.highlights, db.bookmarks, db.items, db.systemStates, db.savePoints], async () => {
     if (data.book?.templates && !book.templates) {
       await db.books.update(book.id!, { templates: data.book.templates });
     }
@@ -199,6 +202,10 @@ export async function importSaveBackup(json: string): Promise<string> {
       lastChapterIndex: data.save.lastChapterIndex,
     });
 
+    if (data.items?.length) await db.items.bulkAdd(data.items.map(({id,saveId:oldSaveId,...item}) => {
+      if (!Number.isInteger(item.quantity) || item.quantity < 1 || !["common","rare","epic","legendary"].includes(item.rarity)) throw new Error("无效的背包物品");
+      return {...item,saveId};
+    }));
     const pcId = await db.characters.add({
       saveId,
       name: data.pc.name,

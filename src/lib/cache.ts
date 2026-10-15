@@ -10,6 +10,7 @@ import type { AIResult } from "./ai";
 const MAX_CACHE_ENTRIES = 500;
 
 export function buildCacheKey(input: {
+  itemContext?: string;
   model: string;
   saveId: number;
   pcName: string;
@@ -18,7 +19,7 @@ export function buildCacheKey(input: {
   action: string;
 }): string {
   // 键里带上"存档 id + 最近行动"，避免不同存档 / 不同局势互相错误命中缓存
-  return JSON.stringify([input.model, input.saveId, input.pcName, input.chapterIndex, input.recentActions, input.action]);
+  return JSON.stringify([input.model, input.saveId, input.pcName, input.chapterIndex, input.recentActions, input.action, input.itemContext ?? ""]);
 }
 
 export async function getCached(key: string): Promise<AIResult | null> {

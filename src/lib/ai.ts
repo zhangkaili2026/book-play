@@ -1,3 +1,4 @@
+import { inventoryPrompt } from "./itemPool";
 // ============================================================
 // AI 客户端：调用 OpenAI 兼容接口（DeepSeek / Qwen / GLM / Kimi / Ollama）。
 // 浏览器直连；API Key 只留在本地，不上传任何服务器。
@@ -86,6 +87,8 @@ export function buildActionPrompt(ctx: {
     power: string;
     resources: string[];
   };
+  inventory?: import("./db").InventoryItem[];
+  itemMessages?: string[];
   chapterTitle: string;
   recentActions: string[];
   action: string;
@@ -112,6 +115,7 @@ export function buildActionPrompt(ctx: {
   const user = [
     `【你的角色】姓名：${ctx.pc.name}；身份：${ctx.pc.identity}；阵营：${ctx.pc.faction}`,
     `【能力】${ctx.pc.abilities.join("、") || "无"}；【势力】${ctx.pc.power}；【资源】${ctx.pc.resources.join("、") || "无"}`,
+    inventoryPrompt(ctx.inventory ?? [], ctx.itemMessages ?? []),
     `【当前章节】${ctx.chapterTitle}`,
     ctx.recentActions.length
       ? `【最近行动】${ctx.recentActions.slice(0, 5).map((a, i) => `${i + 1}. ${a}`).join("；")}`

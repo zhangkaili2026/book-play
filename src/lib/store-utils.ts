@@ -49,6 +49,7 @@ export async function cleanupOrphanData(): Promise<{ removed: number }> {
       await db.systemStates.where("saveId").equals(s.id!).delete();
       await db.savePoints.where("saveId").equals(s.id!).delete();
       await db.highlights.where("saveId").equals(s.id!).delete();
+      await db.items.where("saveId").equals(s.id!).delete();
       await db.bookmarks.where("saveId").equals(s.id!).delete();
       await db.saves.delete(s.id!);
       removed++;
@@ -64,6 +65,7 @@ export async function cleanupOrphanData(): Promise<{ removed: number }> {
     db.savePoints,
     db.highlights,
     db.bookmarks,
+    db.items,
   ] as const;
   for (const table of childTables) {
     const rows = await table.toArray();

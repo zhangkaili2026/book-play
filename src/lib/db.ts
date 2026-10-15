@@ -181,7 +181,11 @@ export interface SavePoint {
   actions: ActionRecord[];    // 行动记录副本
 }
 
+export type ItemRarity = "common" | "rare" | "epic" | "legendary";
+export interface InventoryItem { id?: number; saveId: number; name: string; type: string; quantity: number; desc: string; rarity: ItemRarity; effect: string; }
+
 class BookPlayDB extends Dexie {
+  items!: Table<InventoryItem, number>;
   books!: Table<Book, number>;
   chapters!: Table<Chapter, number>;
   saves!: Table<Save, number>;
@@ -227,6 +231,8 @@ class BookPlayDB extends Dexie {
     this.version(7).stores({
       bookmarks: "++id, saveId, chapterIndex",
     });
+    // v8 adds an empty inventory; existing saves and their records remain intact.
+    this.version(8).stores({ items: "++id, saveId" }).upgrade(async () => { /* no legacy inventory to migrate */ });
   }
 }
 

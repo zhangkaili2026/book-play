@@ -1,3 +1,5 @@
+import { inventoryPrompt, getItemPool, getInventoryShop, drawItem, RARITY_LABEL } from "./itemPool";
+import type { InventoryItem } from "./db";
 import { upsertNpcMemory, cleanupOrphanData, snapshotCurrentState, readTextFile } from "./store-utils";
 import { loadReadingPrefs, saveReadingPrefs } from "./settings";
 import { getOrCreateSystemState, grantXp, updateSystemState, buildRedeemResult, itemMechanicalPatch } from "./system";
@@ -86,6 +88,7 @@ interface AppState {
   templates: { bookType: string; items: BookTemplateItem[] } | null; // 当前书 AI 生成的开局身份
   templatesLoading: boolean;
   savePoints: SavePoint[]; // 当前存档的存档点列表
+  inventory: InventoryItem[];
   shopItems: ShopItem[]; // 当前书的商城兑换项（按书籍类型生成）
   highlights: Highlight[]; // 当前存档的划线批注
   bookmarks: Bookmark[]; // 当前存档的书签（标记想重读的章节）
@@ -122,6 +125,7 @@ interface AppState {
   exportSaveBackup: () => Promise<void>;
   importSave: (json: string) => Promise<string>;
   clearAllData: () => Promise<void>;
+  useItem: (itemId: number) => Promise<void>;
   redeem: (itemId: string) => Promise<void>;
   addRegret: (text: string) => Promise<void>;
   removeRegret: (index: number) => Promise<void>;
@@ -175,7 +179,8 @@ export const useStore = create<AppState>((set, get) => ({
   templates: null,
   templatesLoading: false,
   savePoints: [],
-  shopItems: DEFAULT_SHOP,
+  inventory: [],
+  shopItems: [...getInventoryShop(), DEFAULT_SHOP.find(i=>i.id==="ability-temp")!],
   highlights: [],
   bookmarks: [],
 
@@ -337,9 +342,10 @@ export const useStore = create<AppState>((set, get) => ({
       templates: book?.templates ?? null,
       templatesLoading: false,
       savePoints: [],
-      shopItems: getShopItems(book?.templates?.bookType ?? undefined),
+      shopItems: [...getInventoryShop(book?.templates?.bookType), DEFAULT_SHOP.find(i=>i.id==="ability-temp")!],
       highlights: [],
       bookmarks: [],
+      inventory: [],
     });
 
     if (saves.length > 0) {
@@ -410,6 +416,7 @@ export const useStore = create<AppState>((set, get) => ({
     savePoints.sort((a, b) => b.createdAt - a.createdAt);
     const highlights = await db.highlights.where("saveId").equals(saveId).toArray();
     const bookmarks = await db.bookmarks.where("saveId").equals(saveId).toArray();
+    const inventory = await db.items.where("saveId").equals(saveId).toArray();
     if (request !== saveRequest || get().currentBookId !== bookId) return;
 
     set({
@@ -422,6 +429,7 @@ export const useStore = create<AppState>((set, get) => ({
       allActions: recent,
       npcMemories,
       systemState,
+      inventory,
       savePoints,
       highlights,
       bookmarks,
@@ -468,6 +476,7 @@ export const useStore = create<AppState>((set, get) => ({
     await db.savePoints.where("saveId").equals(saveId).delete();
     await db.highlights.where("saveId").equals(saveId).delete();
     await db.bookmarks.where("saveId").equals(saveId).delete();
+    await db.items.where("saveId").equals(saveId).delete();
     await db.saves.delete(saveId);
 
     const saves =
@@ -493,6 +502,7 @@ export const useStore = create<AppState>((set, get) => ({
           savePoints: [],
           highlights: [],
           bookmarks: [],
+      inventory: [],
         });
         await get().gotoChapter(0);
       }
@@ -511,6 +521,7 @@ export const useStore = create<AppState>((set, get) => ({
       await db.savePoints.where("saveId").equals(s.id!).delete();
       await db.highlights.where("saveId").equals(s.id!).delete();
       await db.bookmarks.where("saveId").equals(s.id!).delete();
+      await db.items.where("saveId").equals(s.id!).delete();
     }
     await db.saves.where("bookId").equals(bookId).delete();
     await db.chapters.where("bookId").equals(bookId).delete();
@@ -551,7 +562,10 @@ export const useStore = create<AppState>((set, get) => ({
         effective = false;
       } else {
         // 先查缓存：相同角色 + 相同章节 + 相同行动 → 直接复用，0 token
+        const inventory = await db.items.where("saveId").equals(currentSaveId).toArray();
+        const itemMessages = (await db.systemStates.where("saveId").equals(currentSaveId).first())?.messages ?? [];
         const cacheKey = buildCacheKey({
+          itemContext: inventoryPrompt(inventory,itemMessages),
           model: settings.model,
           saveId: currentSaveId,
           pcName: currentPC.name,
@@ -570,6 +584,7 @@ export const useStore = create<AppState>((set, get) => ({
         } else {
           try {
             const messages = buildActionPrompt({
+              inventory, itemMessages,
               pc: {
                 name: currentPC.name,
                 identity: currentPC.identity,
@@ -716,7 +731,8 @@ export const useStore = create<AppState>((set, get) => ({
     const bookmarks = await db.bookmarks.where("saveId").equals(currentSaveId).toArray();
     const book = await db.books.get(save.bookId);
     if (!pc || !book) return;
-    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints, highlights, bookmarks });
+    const items = await db.items.where("saveId").equals(currentSaveId).toArray();
+    const backup = buildSaveBackup({ book, save, pc, npcMemories, actions, systemState, savePoints, highlights, bookmarks, items });
     download(`书游存档_${save.name}.json`, JSON.stringify(backup, null, 2), "application/json");
     recordBackup();
   },
@@ -742,6 +758,7 @@ export const useStore = create<AppState>((set, get) => ({
       db.savePoints.clear(),
       db.highlights.clear(),
       db.bookmarks.clear(),
+      db.items.clear(),
     ]);
     localStorage.clear();
     set({
@@ -769,7 +786,31 @@ export const useStore = create<AppState>((set, get) => ({
       savePoints: [],
       highlights: [],
       bookmarks: [],
+      inventory: [],
     });
+  },
+
+  async useItem(itemId: number) {
+    const saveId = get().currentSaveId;
+    if (saveId == null) return;
+    await db.transaction("rw", [db.saves, db.systemStates, db.characters, db.items], async () => {
+      const save = await db.saves.get(saveId);
+      const item = await db.items.get(itemId);
+      if (!save || !item || item.saveId !== saveId || item.quantity < 1) return;
+      const sys = await getOrCreateSystemState(saveId);
+      const pc = await db.characters.get(save.pcId);
+      if (pc && item.type === "功法" && !pc.abilities.includes(item.name)) await db.characters.update(pc.id!, {abilities:[...pc.abilities,item.name]});
+      if (pc && item.type === "钱财" && !pc.resources.includes(item.name)) await db.characters.update(pc.id!, {resources:[...pc.resources,item.name]});
+      if (item.quantity === 1) await db.items.delete(itemId);
+      else await db.items.update(itemId, {quantity:item.quantity-1});
+      const narrative = `使用「${item.name}」【${RARITY_LABEL[item.rarity]}】：${item.effect}${item.type === "情报" ? " " + item.desc : ""}`;
+      await db.systemStates.update(sys.id!, {messages:[...sys.messages,narrative].slice(-20)});
+    });
+    const inventory = await db.items.where("saveId").equals(saveId).toArray();
+    const systemState = await db.systemStates.where("saveId").equals(saveId).first();
+    const save = await db.saves.get(saveId);
+    const pc = save ? await db.characters.get(save.pcId) : undefined;
+    if (get().currentSaveId === saveId) set({inventory,systemState:systemState ?? null,currentPC:pc ?? null});
   },
 
   // 兑换系统点数（本地规则，受偏移度约束）
@@ -781,7 +822,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (!item) return;
 
     // 一个事务原子完成：扣点数 + 记录兑换 + 把能力/道具写进角色数据
-    const updated = await db.transaction("rw", [db.saves, db.systemStates, db.characters], async () => {
+    const updated = await db.transaction("rw", [db.books, db.saves, db.systemStates, db.characters, db.items], async () => {
       const save = await db.saves.get(currentSaveId);
       if (!save) return null;
       const sys = await getOrCreateSystemState(currentSaveId);
@@ -802,7 +843,7 @@ export const useStore = create<AppState>((set, get) => ({
           ...tempAbilities.filter((t) => t.expiresAtChapter > currentChapterIndex),
           { name: item.name, expiresAtChapter: currentChapterIndex + 5 },
         ];
-      } else {
+      } else if (!item.id.startsWith("pool:") && item.id !== "gacha") {
         const pc = await db.characters.get(currentPC.id!);
         if (pc) {
           const patch = itemMechanicalPatch(item, pc);
@@ -810,7 +851,17 @@ export const useStore = create<AppState>((set, get) => ({
         }
       }
 
-      const result = buildRedeemResult(item, npcMemories);
+      let result = buildRedeemResult(item, npcMemories);
+      if (item.id.startsWith("pool:") || item.id === "gacha") {
+        const book = await db.books.get(save.bookId);
+        const pool = getItemPool(book?.templates?.bookType);
+        const candidates = item.id === "gacha" ? pool : pool.filter(i=>i.type === item.id.slice(5));
+        if (!candidates.length) return null;
+        const drawn = drawItem(candidates, item.id === "gacha");
+        const quantity = 1 + Math.floor(Math.random()*3);
+        await db.items.add({...drawn,saveId:currentSaveId,quantity});
+        result = `获得${RARITY_LABEL[drawn.rarity]}物品「${drawn.name}」×${quantity}，已放入背包`;
+      }
       const points = sys.points - item.cost;
       const redeemed = [...sys.redeemed, { name: item.name, at: Date.now(), result }];
       const messages = [...sys.messages, `✅ 兑换成功：${item.name}（-${item.cost} 点数）`].slice(-20);
@@ -819,8 +870,9 @@ export const useStore = create<AppState>((set, get) => ({
       return { ...sys, points, redeemed, messages, tempAbilities };
     });
 
+    const inventory = await db.items.where("saveId").equals(currentSaveId).toArray();
     if (updated && get().currentSaveId === currentSaveId) {
-      set({ systemState: updated });
+      set({ systemState: updated, inventory });
       // 能力/资源变了，刷新 currentPC 让「能力 / 资源」栏实时更新
       const pc = await db.characters.get(currentPC.id!);
       if (pc && get().currentSaveId === currentSaveId) set({ currentPC: pc });
